@@ -1325,3 +1325,62 @@ class TestActionEvCache:
         clear_all_data(db)
         count = db.execute("SELECT COUNT(*) FROM action_ev_cache").fetchone()[0]
         assert count == 0
+
+    def _base_row(self, aid, hero_id, ev_type="range"):
+        return {
+            "action_id": aid,
+            "hero_id": hero_id,
+            "equity": 0.55,
+            "ev": 5.0,
+            "ev_type": ev_type,
+            "blended_vpip": None,
+            "blended_pfr": None,
+            "blended_3bet": None,
+            "villain_preflop_action": None,
+            "contracted_range_size": None,
+            "fold_equity_pct": None,
+            "sample_count": 100,
+            "computed_at": "2024-01-01T00:00:00",
+        }
+
+    def test_allin_exact_ev_type_accepted(self, db, action_id):
+        """ev_type='allin_exact' is accepted by the CHECK constraint."""
+        from pokerhero.database.db import save_action_evs
+
+        aid, hero_id = action_id
+        # Should not raise — currently raises because 'allin_exact' not in CHECK
+        save_action_evs(db, [self._base_row(aid, hero_id, ev_type="allin_exact")])
+        db.commit()
+        count = db.execute(
+            "SELECT COUNT(*) FROM action_ev_cache WHERE ev_type = 'allin_exact'"
+        ).fetchone()[0]
+        assert count == 1
+
+    def test_allin_exact_multiway_ev_type_accepted(self, db, action_id):
+        """ev_type='allin_exact_multiway' is accepted by the CHECK constraint."""
+        from pokerhero.database.db import save_action_evs
+
+        aid, hero_id = action_id
+        save_action_evs(
+            db, [self._base_row(aid, hero_id, ev_type="allin_exact_multiway")]
+        )
+        db.commit()
+        count = db.execute(
+            "SELECT COUNT(*) FROM action_ev_cache"
+            " WHERE ev_type = 'allin_exact_multiway'"
+        ).fetchone()[0]
+        assert count == 1
+
+    def test_dual_rows_per_action_allowed(self, db, action_id):
+        """Same action can have both 'range' and 'allin_exact' rows."""
+        from pokerhero.database.db import save_action_evs
+
+        aid, hero_id = action_id
+        save_action_evs(db, [self._base_row(aid, hero_id, ev_type="range")])
+        # Should not raise (old PK would have raised UNIQUE constraint)
+        save_action_evs(db, [self._base_row(aid, hero_id, ev_type="allin_exact")])
+        db.commit()
+        count = db.execute(
+            "SELECT COUNT(*) FROM action_ev_cache WHERE action_id = ?", (aid,)
+        ).fetchone()[0]
+        assert count == 2

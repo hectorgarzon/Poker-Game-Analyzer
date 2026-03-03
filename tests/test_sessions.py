@@ -2672,10 +2672,170 @@ class TestCalculateSessionEvs:
         # With fold equity, EV must be strictly higher than showdown EV
         assert actual_ev > showdown_ev
 
+    # ---------------------------------------------------------------------------
+    # TestGetSessionEvStatus
+    # ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# TestGetSessionEvStatus
-# ---------------------------------------------------------------------------
+    def test_non_allin_with_known_cards_writes_range_only(self, db_file):
+        """Non-all-in CALL with known villain cards writes range EV only."""
+        conn, db_path = db_file
+        from pokerhero.analysis.stats import calculate_session_evs
+
+        sid, _, hero_id, _, action_id = self._seed_hand(
+            conn,
+            hero_cards="Ac Kd",
+            villain_cards="2c 3d",
+            board_flop="Qs Jd 4h",
+            board_turn="7s",
+            board_river="8h",
+            hero_action_street="RIVER",
+        )
+        # is_all_in = 0 (default in _seed_hand) → only range row expected
+        calculate_session_evs(db_path, sid, hero_id, self._FAST_SETTINGS)
+        rows = conn.execute(
+            "SELECT ev_type FROM action_ev_cache WHERE action_id = ? AND hero_id = ?",
+            (action_id, hero_id),
+        ).fetchall()
+        ev_types = {r[0] for r in rows}
+        assert "range" in ev_types or "range_multiway_approx" in ev_types
+        assert "allin_exact" not in ev_types
+        assert "allin_exact_multiway" not in ev_types
+
+    def test_allin_with_known_cards_writes_dual_rows(self, db_file):
+        """is_all_in=1 with known cards writes both range and allin_exact rows."""
+        conn, db_path = db_file
+        from pokerhero.analysis.stats import calculate_session_evs
+
+        # Seed with is_all_in = 1 on the hero action
+        hero_id = conn.execute(
+            "INSERT INTO players (username, preferred_name)"
+            " VALUES ('hero_ai', 'HeroAI')"
+        ).lastrowid
+        villain_id = conn.execute(
+            "INSERT INTO players (username, preferred_name) VALUES ('vil_ai', 'VilAI')"
+        ).lastrowid
+        sid = conn.execute(
+            "INSERT INTO sessions"
+            " (game_type, limit_type, max_seats,"
+            "  small_blind, big_blind, ante, start_time)"
+            " VALUES ('NLHE', 'No Limit', 6, 50, 100, 0, '2024-07-01')"
+        ).lastrowid
+        hid = conn.execute(
+            "INSERT INTO hands"
+            " (source_hand_id, session_id, total_pot, uncalled_bet_returned,"
+            "  rake, timestamp, board_flop, board_turn, board_river)"
+            " VALUES ('AI1', ?, 2000, 0, 0, '2024-07-01T00:00:00',"
+            " 'Qs Jd 4h', NULL, NULL)",
+            (sid,),
+        ).lastrowid
+        conn.execute(
+            "INSERT INTO hand_players"
+            " (hand_id, player_id, position, starting_stack, hole_cards,"
+            "  vpip, pfr, three_bet, went_to_showdown, net_result)"
+            " VALUES (?, ?, 'BTN', 5000, 'Ac Kd', 1, 1, 0, 1, -1000)",
+            (hid, hero_id),
+        )
+        conn.execute(
+            "INSERT INTO hand_players"
+            " (hand_id, player_id, position, starting_stack, hole_cards,"
+            "  vpip, pfr, three_bet, went_to_showdown, net_result)"
+            " VALUES (?, ?, 'BB', 5000, '2c 3d', 1, 1, 0, 1, 1000)",
+            (hid, villain_id),
+        )
+        conn.execute(
+            "INSERT INTO actions"
+            " (hand_id, player_id, is_hero, street, action_type,"
+            "  amount, amount_to_call, pot_before, is_all_in, sequence)"
+            " VALUES (?, ?, 0, 'PREFLOP', 'RAISE', 300, 0, 150, 0, 1)",
+            (hid, villain_id),
+        )
+        allin_action_id = conn.execute(
+            "INSERT INTO actions"
+            " (hand_id, player_id, is_hero, street, action_type,"
+            "  amount, amount_to_call, pot_before, is_all_in, sequence)"
+            " VALUES (?, ?, 1, 'FLOP', 'CALL', 1000, 1000, 800, 1, 2)",
+            (hid, hero_id),
+        ).lastrowid
+        conn.commit()
+
+        calculate_session_evs(db_path, sid, hero_id, self._FAST_SETTINGS)
+        rows = conn.execute(
+            "SELECT ev_type FROM action_ev_cache WHERE action_id = ? AND hero_id = ?",
+            (allin_action_id, hero_id),
+        ).fetchall()
+        ev_types = {r[0] for r in rows}
+        # Must have a range row for decision review
+        assert ev_types & {"range", "range_multiway_approx"}, (
+            f"Expected range row, got: {ev_types}"
+        )
+        # Must also have an allin_exact row for variance tracking
+        assert "allin_exact" in ev_types, f"Expected allin_exact row, got: {ev_types}"
+
+    def test_allin_with_unknown_cards_writes_range_only(self, db_file):
+        """is_all_in=1 with unknown villain cards writes range only (no allin_exact)."""
+        conn, db_path = db_file
+        from pokerhero.analysis.stats import calculate_session_evs
+
+        hero_id = conn.execute(
+            "INSERT INTO players (username, preferred_name)"
+            " VALUES ('hero_aiunk', 'HeroAIUnk')"
+        ).lastrowid
+        villain_id = conn.execute(
+            "INSERT INTO players (username, preferred_name)"
+            " VALUES ('vil_aiunk', 'VilAIUnk')"
+        ).lastrowid
+        sid = conn.execute(
+            "INSERT INTO sessions"
+            " (game_type, limit_type, max_seats,"
+            "  small_blind, big_blind, ante, start_time)"
+            " VALUES ('NLHE', 'No Limit', 6, 50, 100, 0, '2024-08-01')"
+        ).lastrowid
+        hid = conn.execute(
+            "INSERT INTO hands"
+            " (source_hand_id, session_id, total_pot, uncalled_bet_returned,"
+            "  rake, timestamp, board_flop, board_turn, board_river)"
+            " VALUES ('AIU1', ?, 2000, 0, 0, '2024-08-01T00:00:00',"
+            " 'Qs Jd 4h', NULL, NULL)",
+            (sid,),
+        ).lastrowid
+        conn.execute(
+            "INSERT INTO hand_players"
+            " (hand_id, player_id, position, starting_stack, hole_cards,"
+            "  vpip, pfr, three_bet, went_to_showdown, net_result)"
+            " VALUES (?, ?, 'BTN', 5000, 'Ac Kd', 1, 1, 0, 0, -1000)",
+            (hid, hero_id),
+        )
+        conn.execute(
+            "INSERT INTO hand_players"
+            " (hand_id, player_id, position, starting_stack, hole_cards,"
+            "  vpip, pfr, three_bet, went_to_showdown, net_result)"
+            " VALUES (?, ?, 'BB', 5000, NULL, 1, 1, 0, 0, 1000)",
+            (hid, villain_id),
+        )
+        conn.execute(
+            "INSERT INTO actions"
+            " (hand_id, player_id, is_hero, street, action_type,"
+            "  amount, amount_to_call, pot_before, is_all_in, sequence)"
+            " VALUES (?, ?, 0, 'PREFLOP', 'RAISE', 300, 0, 150, 0, 1)",
+            (hid, villain_id),
+        )
+        allin_action_id = conn.execute(
+            "INSERT INTO actions"
+            " (hand_id, player_id, is_hero, street, action_type,"
+            "  amount, amount_to_call, pot_before, is_all_in, sequence)"
+            " VALUES (?, ?, 1, 'FLOP', 'CALL', 1000, 1000, 800, 1, 2)",
+            (hid, hero_id),
+        ).lastrowid
+        conn.commit()
+
+        calculate_session_evs(db_path, sid, hero_id, self._FAST_SETTINGS)
+        rows = conn.execute(
+            "SELECT ev_type FROM action_ev_cache WHERE action_id = ? AND hero_id = ?",
+            (allin_action_id, hero_id),
+        ).fetchall()
+        ev_types = {r[0] for r in rows}
+        assert "allin_exact" not in ev_types
+        assert "allin_exact_multiway" not in ev_types
 
 
 class TestGetSessionEvStatus:
