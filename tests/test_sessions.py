@@ -611,6 +611,26 @@ class TestHandFilters:
         assert len(result) == 4
 
 
+class TestRenderHandsFilterState:
+    """Tests for filter state persistence across drill-down navigation."""
+
+    def setup_method(self):
+        from pokerhero.frontend.app import create_app
+
+        create_app(db_path=":memory:")
+
+    def test_render_hands_accepts_filter_state_kwarg(self, tmp_path):
+        """_render_hands must accept an optional filter_state kwarg without
+        raising TypeError, even when the DB has no hero configured."""
+        from pokerhero.database.db import init_db
+        from pokerhero.frontend.pages.sessions import _render_hands
+
+        db_path = str(tmp_path / "test.db")
+        init_db(db_path)
+        result = _render_hands(db_path, session_id=0, filter_state=None)
+        assert isinstance(result, tuple)
+
+
 class TestFavoriteButton:
     """Tests for the favourite button helper and filter extensions."""
 
