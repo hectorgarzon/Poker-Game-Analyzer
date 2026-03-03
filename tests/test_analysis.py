@@ -109,6 +109,15 @@ class TestQueries:
         df = get_hands(db_with_data, session_id, hero_player_id)
         assert {"position", "went_to_showdown", "saw_flop"} <= set(df.columns)
 
+    def test_get_hands_includes_ev_flag_columns(self, db_with_data, hero_player_id):
+        """get_hands must include has_bad_call, has_good_call, has_bad_fold for the
+        EV-based hand filter."""
+        from pokerhero.analysis.queries import get_hands, get_sessions
+
+        session_id = get_sessions(db_with_data, hero_player_id)["id"].iloc[0]
+        df = get_hands(db_with_data, session_id, hero_player_id)
+        assert {"has_bad_call", "has_good_call", "has_bad_fold"} <= set(df.columns)
+
     def test_get_actions_returns_dataframe(self, db_with_data, hero_player_id):
         from pokerhero.analysis.queries import get_actions, get_hands, get_sessions
 

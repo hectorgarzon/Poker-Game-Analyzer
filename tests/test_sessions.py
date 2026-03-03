@@ -537,6 +537,79 @@ class TestHandFilters:
         result = _filter_hands_data(self._make_df(), None, None, None, False, True)
         assert len(result) == 2
 
+    def _make_ev_df(self):
+        import pandas as pd
+
+        return pd.DataFrame(
+            {
+                "id": [1, 2, 3, 4],
+                "source_hand_id": ["H1", "H2", "H3", "H4"],
+                "hole_cards": ["As Kh", "Qd Jc", None, "7s 2d"],
+                "total_pot": [300.0, 150.0, 500.0, 80.0],
+                "net_result": [200.0, -100.0, 400.0, -50.0],
+                "position": ["BTN", "SB", "BB", "CO"],
+                "went_to_showdown": [1, 0, 1, 0],
+                "saw_flop": [1, 0, 1, 1],
+                "has_bad_call": [0, 1, 0, 0],
+                "has_good_call": [1, 0, 0, 0],
+                "has_bad_fold": [0, 0, 1, 0],
+            }
+        )
+
+    def test_ev_filter_bad_call(self):
+        """Only hands with has_bad_call=1 are returned when ev_filter=['bad_call']."""
+        from pokerhero.frontend.pages.sessions import _filter_hands_data
+
+        result = _filter_hands_data(
+            self._make_ev_df(), None, None, None, False, False, ev_filter=["bad_call"]
+        )
+        assert len(result) == 1
+        assert result.iloc[0]["id"] == 2
+
+    def test_ev_filter_good_call(self):
+        """Only hands with has_good_call=1 are returned when ev_filter=['good_call']."""
+        from pokerhero.frontend.pages.sessions import _filter_hands_data
+
+        result = _filter_hands_data(
+            self._make_ev_df(), None, None, None, False, False, ev_filter=["good_call"]
+        )
+        assert len(result) == 1
+        assert result.iloc[0]["id"] == 1
+
+    def test_ev_filter_bad_fold(self):
+        """Only hands with has_bad_fold=1 are returned when ev_filter=['bad_fold']."""
+        from pokerhero.frontend.pages.sessions import _filter_hands_data
+
+        result = _filter_hands_data(
+            self._make_ev_df(), None, None, None, False, False, ev_filter=["bad_fold"]
+        )
+        assert len(result) == 1
+        assert result.iloc[0]["id"] == 3
+
+    def test_ev_filter_or_logic(self):
+        """Multiple EV filter values use OR logic — union of matching hands."""
+        from pokerhero.frontend.pages.sessions import _filter_hands_data
+
+        result = _filter_hands_data(
+            self._make_ev_df(),
+            None,
+            None,
+            None,
+            False,
+            False,
+            ev_filter=["bad_call", "bad_fold"],
+        )
+        assert len(result) == 2
+
+    def test_ev_filter_none_returns_all(self):
+        """No EV filter applied when ev_filter is None."""
+        from pokerhero.frontend.pages.sessions import _filter_hands_data
+
+        result = _filter_hands_data(
+            self._make_ev_df(), None, None, None, False, False, ev_filter=None
+        )
+        assert len(result) == 4
+
 
 class TestFavoriteButton:
     """Tests for the favourite button helper and filter extensions."""
