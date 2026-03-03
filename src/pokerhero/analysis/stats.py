@@ -325,6 +325,8 @@ def compute_ev(
     """
     if not villain_cards or not villain_cards.strip():
         return None
+    if len(villain_cards.strip().split()) != 2 or len(hero_cards.strip().split()) != 2:
+        return None
 
     equity = compute_equity(
         hero_cards.strip(),

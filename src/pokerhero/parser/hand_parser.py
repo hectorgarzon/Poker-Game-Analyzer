@@ -387,7 +387,9 @@ class HandParser:
             if m_shows:
                 username = m_shows.group(1).strip()
                 showdown_players.add(username)
-                showdown_cards[username] = m_shows.group(2)
+                cards = m_shows.group(2)
+                if len(cards.split()) == 2:  # only store complete 2-card hands
+                    showdown_cards[username] = cards
                 continue
 
             m_mucks = _RE_MUCKS_SHOWDOWN.match(stripped)
@@ -621,7 +623,7 @@ class HandParser:
                     ) + Decimal(m_won.group(1))
                     # cards shown
                     m_cards = re.search(r"showed \[(.+?)\]", stripped)
-                    if m_cards:
+                    if m_cards and len(m_cards.group(1).split()) == 2:
                         result["shown_cards"][uname] = m_cards.group(1)
                     continue
 
@@ -638,7 +640,7 @@ class HandParser:
 
                 # mucked cards
                 m_mucked = _RE_MUCKED_SUMMARY.search(stripped)
-                if m_mucked:
+                if m_mucked and len(m_mucked.group(1).split()) == 2:
                     after_seat = re.sub(r"^Seat \d+: ", "", stripped)
                     uname = after_seat.split(" mucked")[0].strip()
                     uname = re.sub(r"\s*\([^)]+\)\s*$", "", uname).strip()
