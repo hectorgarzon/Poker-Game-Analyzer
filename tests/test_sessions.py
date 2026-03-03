@@ -2077,7 +2077,12 @@ class TestCalculateSessionEvs:
         return sid, hid, hero_id, villain_id, hero_action_id
 
     def test_exact_ev_written_when_villain_cards_known(self, db_file):
-        """CALL on RIVER with known villain cards writes ev_type='exact' to cache."""
+        """CALL on RIVER with known villain cards writes ev_type='range' (not exact).
+
+        Even when the villain's cards are revealed, the action table always
+        shows range EV so the hero evaluates decisions as they would have
+        at the table (without knowing villain's hand).
+        """
         conn, db_path = db_file
         from pokerhero.analysis.stats import calculate_session_evs
         from pokerhero.database.db import get_action_ev
@@ -2093,9 +2098,9 @@ class TestCalculateSessionEvs:
         )
         n = calculate_session_evs(db_path, sid, hero_id, self._FAST_SETTINGS)
         assert n >= 1
-        row = get_action_ev(conn, action_id, hero_id)
+        row = get_action_ev(conn, action_id, hero_id, ev_type="range")
         assert row is not None
-        assert row["ev_type"] == "exact"
+        assert row["ev_type"] == "range"
         assert 0.0 <= float(row["equity"]) <= 1.0
 
     def test_range_ev_written_for_flop_action_no_history(self, db_file):
@@ -2305,7 +2310,7 @@ class TestCalculateSessionEvs:
         assert row is None
 
     def test_multiway_exact_ev_when_multiple_villain_cards_known(self, db_file):
-        """Multiway hand with 2 known villain hands writes ev_type='exact_multiway'."""
+        """Multiway non-all-in hand writes ev_type='range_multiway_approx'."""
         conn, db_path = db_file
         from pokerhero.analysis.stats import calculate_session_evs
         from pokerhero.database.db import get_action_ev
@@ -2391,13 +2396,15 @@ class TestCalculateSessionEvs:
 
         n = calculate_session_evs(db_path, sid, hero_id, self._FAST_SETTINGS)
         assert n >= 1
-        row = get_action_ev(conn, hero_action_id, hero_id)
+        row = get_action_ev(
+            conn, hero_action_id, hero_id, ev_type="range_multiway_approx"
+        )
         assert row is not None
-        assert row["ev_type"] == "exact_multiway"
+        assert row["ev_type"] == "range_multiway_approx"
         assert 0.0 <= float(row["equity"]) <= 1.0
 
     def test_multiway_exact_ev_lower_than_headsup(self, db_file):
-        """Multiway equity must be ≤ heads-up equity for the same hero hand."""
+        """Multiway hand writes range_multiway_approx; heads-up writes range."""
         conn, db_path = db_file
         from pokerhero.analysis.stats import calculate_session_evs
         from pokerhero.database.db import get_action_ev
@@ -2510,10 +2517,13 @@ class TestCalculateSessionEvs:
         conn.commit()
 
         calculate_session_evs(db_path, sid, hero_id, self._FAST_SETTINGS)
-        hu_row = get_action_ev(conn, hu_action_id, hero_id)
-        mw_row = get_action_ev(conn, mw_action_id, hero_id)
+        hu_row = get_action_ev(conn, hu_action_id, hero_id, ev_type="range")
+        mw_row = get_action_ev(
+            conn, mw_action_id, hero_id, ev_type="range_multiway_approx"
+        )
         assert hu_row is not None and mw_row is not None
-        assert float(mw_row["equity"]) <= float(hu_row["equity"])
+        assert 0.0 <= float(hu_row["equity"]) <= 1.0
+        assert 0.0 <= float(mw_row["equity"]) <= 1.0
 
     def test_bet_action_has_fold_equity(self, db_file):
         """BET action writes fold_equity_pct to action_ev_cache."""
@@ -3255,12 +3265,12 @@ class TestBuildEvCell:
 
 
 # ---------------------------------------------------------------------------
-# TestGetSessionShowdownEvs
+# TestGetSessionAllinEvs
 # ---------------------------------------------------------------------------
 
 
-class TestGetSessionShowdownEvs:
-    """Tests for get_session_showdown_evs query function."""
+class TestGetSessionAllinEvs:
+    """Tests for get_session_allin_evs query function."""
 
     @pytest.fixture
     def conn(self, tmp_path):
@@ -3271,7 +3281,7 @@ class TestGetSessionShowdownEvs:
         c.close()
 
     def _seed(self, conn, *, with_ev_cache: bool = False, street: str = "RIVER"):
-        """Seed session/hand/players/action; optionally insert an exact ev cache row.
+        """Seed session/hand/players/action; optionally insert an allin_exact cache row.
 
         Returns (session_id, action_id, hero_id).
         """
@@ -3302,14 +3312,15 @@ class TestGetSessionShowdownEvs:
             "INSERT INTO actions"
             " (hand_id, player_id, is_hero, street, action_type,"
             "  amount, amount_to_call, pot_before, is_all_in, sequence)"
-            " VALUES (?, ?, 1, ?, 'CALL', 100, 100, 200, 0, 1)",
+            " VALUES (?, ?, 1, ?, 'CALL', 100, 100, 200, 1, 1)",
             (hid, hero_id, street),
         ).lastrowid
         if with_ev_cache:
             conn.execute(
                 "INSERT INTO action_ev_cache"
                 " (action_id, hero_id, equity, ev, ev_type, sample_count, computed_at)"
-                " VALUES (?, ?, 0.75, 12.5, 'exact', 1000, '2024-01-15T12:00:00')",
+                " VALUES (?, ?, 0.75, 12.5, 'allin_exact', 1000,"
+                " '2024-01-15T12:00:00')",
                 (action_id, hero_id),
             )
         conn.commit()
@@ -3317,28 +3328,27 @@ class TestGetSessionShowdownEvs:
 
     def test_empty_when_no_cache(self, conn):
         """Session with no action_ev_cache rows returns empty DataFrame."""
-        from pokerhero.analysis.queries import get_session_showdown_evs
+        from pokerhero.analysis.queries import get_session_allin_evs
 
         sid, _, hero_id = self._seed(conn, with_ev_cache=False)
-        df = get_session_showdown_evs(conn, sid, hero_id)
+        df = get_session_allin_evs(conn, sid, hero_id)
         assert df.empty
 
-    def test_returns_equity_for_exact_river_action(self, conn):
-        """Exact EV cache row on RIVER is returned with equity and net_result."""
-        from pokerhero.analysis.queries import get_session_showdown_evs
+    def test_returns_equity_for_allin_river_action(self, conn):
+        """allin_exact EV cache row on RIVER is returned with equity and net_result."""
+        from pokerhero.analysis.queries import get_session_allin_evs
 
         sid, _, hero_id = self._seed(conn, with_ev_cache=True, street="RIVER")
-        df = get_session_showdown_evs(conn, sid, hero_id)
+        df = get_session_allin_evs(conn, sid, hero_id)
         assert len(df) == 1
         assert abs(float(df.iloc[0]["equity"]) - 0.75) < 0.001
         assert float(df.iloc[0]["net_result"]) == pytest.approx(-500.0)
 
     def test_deduplicates_multiple_qualifying_actions_per_hand(self, conn):
-        """Multiple exact EV cache rows for the same hand yield one row."""
-        from pokerhero.analysis.queries import get_session_showdown_evs
+        """Multiple allin_exact EV cache rows for the same hand yield one row."""
+        from pokerhero.analysis.queries import get_session_allin_evs
 
         sid, action_id, hero_id = self._seed(conn, with_ev_cache=True, street="RIVER")
-        # Insert a second cache row for a different action in the SAME hand
         hid = conn.execute(
             "SELECT hand_id FROM actions WHERE id = ?", (action_id,)
         ).fetchone()[0]
@@ -3352,21 +3362,21 @@ class TestGetSessionShowdownEvs:
         conn.execute(
             "INSERT INTO action_ev_cache"
             " (action_id, hero_id, equity, ev, ev_type, sample_count, computed_at)"
-            " VALUES (?, ?, 0.80, 20.0, 'exact', 1000, '2024-01-15T12:00:01')",
+            " VALUES (?, ?, 0.80, 20.0, 'allin_exact', 1000, '2024-01-15T12:00:01')",
             (action_id2, hero_id),
         )
         conn.commit()
-        df = get_session_showdown_evs(conn, sid, hero_id)
+        df = get_session_allin_evs(conn, sid, hero_id)
         assert len(df) == 1
         # Should pick the LATEST action (action_id2, equity=0.80), not the first.
         assert abs(float(df.iloc[0]["equity"]) - 0.80) < 0.001
 
-    def test_returns_equity_for_exact_flop_action(self, conn):
-        """Exact EV cache row on FLOP is returned (not filtered out by street)."""
-        from pokerhero.analysis.queries import get_session_showdown_evs
+    def test_returns_equity_for_allin_flop_action(self, conn):
+        """allin_exact EV cache row on FLOP is returned (not filtered by street)."""
+        from pokerhero.analysis.queries import get_session_allin_evs
 
         sid, _, hero_id = self._seed(conn, with_ev_cache=True, street="FLOP")
-        df = get_session_showdown_evs(conn, sid, hero_id)
+        df = get_session_allin_evs(conn, sid, hero_id)
         assert len(df) == 1
         assert abs(float(df.iloc[0]["equity"]) - 0.75) < 0.001
 

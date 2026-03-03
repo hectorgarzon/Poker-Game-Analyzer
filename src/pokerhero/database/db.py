@@ -356,6 +356,7 @@ def get_action_ev(
     conn: sqlite3.Connection,
     action_id: int,
     hero_id: int,
+    ev_type: str | None = None,
 ) -> dict[str, object] | None:
     """Return cached action_ev_cache row as a dict, or None on miss.
 
@@ -363,15 +364,24 @@ def get_action_ev(
         conn: An open SQLite connection.
         action_id: Internal action id.
         hero_id: Internal player id for the hero.
+        ev_type: If provided, return the row with this specific ev_type.
+                 If None, returns the first matching row (any ev_type).
 
     Returns:
         Dict with all action_ev_cache columns, or None if no row found.
     """
     conn.row_factory = sqlite3.Row
-    row = conn.execute(
-        "SELECT * FROM action_ev_cache WHERE action_id = ? AND hero_id = ?",
-        (action_id, hero_id),
-    ).fetchone()
+    if ev_type is not None:
+        row = conn.execute(
+            "SELECT * FROM action_ev_cache"
+            " WHERE action_id = ? AND hero_id = ? AND ev_type = ?",
+            (action_id, hero_id, ev_type),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT * FROM action_ev_cache WHERE action_id = ? AND hero_id = ?",
+            (action_id, hero_id),
+        ).fetchone()
     return dict(row) if row is not None else None
 
 

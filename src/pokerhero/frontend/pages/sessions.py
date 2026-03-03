@@ -775,6 +775,8 @@ def _build_ev_cell(
 ) -> str | html.Div:
     """Build the EV display cell for an action table row.
 
+    Always shows range-based equity (decision-review track).
+
     Args:
         cache_row: Dict from ``action_ev_cache`` (all columns), or ``None``
             when no cached EV exists for this action.
@@ -783,7 +785,7 @@ def _build_ev_cell(
 
     Returns:
         ``'—'`` when *cache_row* is ``None``.
-        An ``html.Div`` for exact or range EV rows.
+        An ``html.Div`` with range-equity display.
     """
     if cache_row is None:
         return "—"
@@ -803,21 +805,7 @@ def _build_ev_cell(
             color = "var(--pnl-positive, green)"
         return html.Div(html.Span(label, style={"color": color, "fontSize": "12px"}))
 
-    if ev_type in ("exact", "exact_multiway"):
-        equity_pct = f"{equity * 100:.0f}%"
-        prefix = "Multiway " if ev_type == "exact_multiway" else ""
-        summary = f"{prefix}Equity: {equity_pct}   EV: {ev_str}"
-        children: list[Any] = [html.Span(summary)]
-        if action_type == "CALL" and ev < 0:
-            children.append(
-                html.Div(
-                    "[Fold was better ↑]",
-                    style={"color": "var(--pnl-negative, red)", "fontSize": "11px"},
-                )
-            )
-        return html.Div(children)
-
-    # ev_type == "range" or "range_multiway_approx"
+    # Range EV (decision-review track)
     equity_pct = f"~{equity * 100:.0f}%"
     multiway_note = " (multiway approx)" if ev_type == "range_multiway_approx" else ""
     summary = f"Est. Equity: {equity_pct}   Est. EV: {ev_str}{multiway_note}"
@@ -834,21 +822,27 @@ def _build_ev_cell(
         "Note: bluffs not explicitly modelled.",
     ]
     tooltip = "  |  ".join(tooltip_parts)
-    return html.Div(
-        [
-            html.Span(summary),
-            html.Span(
-                " ℹ",
-                title=tooltip,
-                style={
-                    "cursor": "help",
-                    "color": "var(--text-3, #888)",
-                    "fontSize": "11px",
-                    "marginLeft": "4px",
-                },
-            ),
-        ]
-    )
+    children: list[Any] = [
+        html.Span(summary),
+        html.Span(
+            " ℹ",
+            title=tooltip,
+            style={
+                "cursor": "help",
+                "color": "var(--text-3, #888)",
+                "fontSize": "11px",
+                "marginLeft": "4px",
+            },
+        ),
+    ]
+    if action_type == "CALL" and ev < 0:
+        children.append(
+            html.Div(
+                "[Fold was better ↑]",
+                style={"color": "var(--pnl-negative, red)", "fontSize": "11px"},
+            )
+        )
+    return html.Div(children)
 
 
 def _breadcrumb(
@@ -1919,20 +1913,20 @@ def _build_ev_summary(
     lucky_threshold: float = 0.4,
     unlucky_threshold: float = 0.6,
 ) -> html.Div:
-    """Return an EV luck indicator based on cached exact-EV showdown/all-in rows.
+    """Return an EV luck indicator based on cached all-in exact EV rows.
 
     Classifies the session as above/below/near equity using pre-computed
-    equity values read from ``action_ev_cache`` via ``get_session_showdown_evs``.
+    equity values read from ``action_ev_cache`` via ``get_session_allin_evs``.
 
     Args:
-        ev_df: DataFrame from get_session_showdown_evs (columns: hand_id,
-               source_hand_id, equity, net_result).  Empty means EVs have not
-               been calculated yet.
+        ev_df: DataFrame from get_session_allin_evs (columns: hand_id,
+               source_hand_id, equity, net_result).  Empty means no all-in
+               EV data has been calculated yet.
         lucky_threshold: Hero wins with equity below this fraction → Lucky.
         unlucky_threshold: Hero loses with equity above this fraction → Unlucky.
 
     Returns:
-        html.Div with a luck verdict and showdown hand count.
+        html.Div with a luck verdict and all-in hand count.
     """
     if ev_df.empty:
         return html.Div(
@@ -2018,7 +2012,7 @@ def _build_flagged_hands_list(
     is a clickable link that navigates directly to the hand action view.
 
     Args:
-        ev_df: DataFrame from get_session_showdown_evs (columns: hand_id,
+        ev_df: DataFrame from get_session_allin_evs (columns: hand_id,
                source_hand_id, equity, net_result).
         session_id: Internal session id used to build the deep-link URL.
         lucky_threshold: Hero wins with equity below this fraction → Lucky.
@@ -2029,7 +2023,7 @@ def _build_flagged_hands_list(
     """
     if ev_df.empty:
         return html.Div(
-            "No showdown data available for analysis.",
+            "No all-in EV data available for analysis.",
             style={"color": "var(--text-4, #888)", "fontSize": "13px"},
         )
 
@@ -2117,16 +2111,16 @@ def _render_session_report(db_path: str, session_id: int) -> tuple[html.Div | st
         )
 
     from pokerhero.analysis.queries import (
+        get_session_allin_evs,
         get_session_hero_actions,
         get_session_kpis,
-        get_session_showdown_evs,
     )
 
     conn = get_connection(db_path)
     try:
         kpis_df = get_session_kpis(conn, session_id, player_id)
         actions_df = get_session_hero_actions(conn, session_id, player_id)
-        ev_df = get_session_showdown_evs(conn, session_id, int(player_id))
+        ev_df = get_session_allin_evs(conn, session_id, int(player_id))
         pos_table = _build_session_position_table(kpis_df, conn)
         s = _read_analysis_settings(db_path)
     finally:
@@ -2435,6 +2429,7 @@ def _render_actions(db_path: str, hand_id: int) -> tuple[html.Div | str, str]:
                 FROM action_ev_cache aec
                 JOIN actions a ON aec.action_id = a.id
                 WHERE a.hand_id = ? AND aec.hero_id = ?
+                  AND aec.ev_type IN ('range', 'range_multiway_approx')
                 """,
                 (hand_id, hero_id),
             ).fetchall():

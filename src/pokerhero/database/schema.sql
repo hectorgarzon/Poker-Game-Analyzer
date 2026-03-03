@@ -77,7 +77,11 @@ CREATE TABLE IF NOT EXISTS action_ev_cache (
     hero_id                INTEGER NOT NULL REFERENCES players(id),
     equity                 REAL    NOT NULL,
     ev                     REAL    NOT NULL,
-    ev_type                TEXT    NOT NULL CHECK(ev_type IN ('exact', 'exact_multiway', 'range', 'range_multiway_approx')),
+    ev_type                TEXT    NOT NULL CHECK(ev_type IN (
+                               'exact', 'exact_multiway',
+                               'range', 'range_multiway_approx',
+                               'allin_exact', 'allin_exact_multiway'
+                           )),
     blended_vpip           REAL,
     blended_pfr            REAL,
     blended_3bet           REAL,
@@ -86,7 +90,7 @@ CREATE TABLE IF NOT EXISTS action_ev_cache (
     fold_equity_pct        REAL,
     sample_count           INTEGER NOT NULL,
     computed_at            TEXT    NOT NULL,
-    PRIMARY KEY (action_id, hero_id)
+    PRIMARY KEY (action_id, hero_id, ev_type)
 );
 
 CREATE TABLE IF NOT EXISTS target_settings (
