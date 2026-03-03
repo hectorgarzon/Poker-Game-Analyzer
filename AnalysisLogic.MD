@@ -127,7 +127,7 @@ $$\text{traffic\_light}(v, g_{min}, g_{max}, y_{min}, y_{max}) = \begin{cases} \
 
 ### A. Exact EV (villain cards known)
 
-When the Hero goes **All-in** or the hand reaches **Showdown** (villain cards are visible):
+When the Hero goes **All-in** and villain cards are known:
 $$EV_{Action} = (Equity \times Pot_{to\_Win}) - Wager$$
 
 This is equivalent to:
@@ -135,16 +135,16 @@ $$EV_{Action} = (Equity \times Pot_{before}) - ((1 - Equity) \times Wager)$$
 
 Both forms yield the **net expected profit**: Hero wins the full pot (including their own wager) with probability $Equity$, and loses their wager with probability $(1 - Equity)$.
 
-* **Equity**: Hero's win % computed via PokerKit Monte Carlo simulation against the villain's exact hole cards.
+* **Equity**: Hero's win % computed via PokerKit Monte Carlo simulation against the villain's exact hole cards — only valid when hero shoved all-in and villain cards were later revealed.
 * **Pot to Win**: `pot_before + wager` (what Hero stands to gain).
 * **Wager**: `amount_to_call` for CALL and FOLD actions; `amount` for BET/RAISE actions.
-* **Display**: Green = positive EV, Red = negative EV. For CALL actions with negative EV, a *"[Fold was better ↑]"* hint appears. For FOLD actions, a verdict is shown instead (see § D Fold EV below).
-* **`ev_type = 'exact'`** in `action_ev_cache`.
+* **Display**: Used for the **Lucky/Unlucky variance summary** only — not shown in the action table.
+* **`ev_type = 'allin_exact'`** in `action_ev_cache`.
 
-**Multiway exact EV**: When multiple active villains have known hole cards, the pipeline uses `compute_equity_multiway()` (pipe-separated villain hands) instead of the heads-up `compute_ev()`. This yields more accurate equity for multiway pots.
-* **`ev_type = 'exact_multiway'`** in `action_ev_cache`.
+**Multiway all-in exact EV**: When multiple active villains have known hole cards, the pipeline uses `compute_equity_multiway()` (pipe-separated villain hands). Hero's equity is computed at the moment of the all-in, regardless of side pots formed on later streets.
+* **`ev_type = 'allin_exact_multiway'`** in `action_ev_cache`.
 
-### B. Range-based EV (villain cards unknown)
+### B. Range-based EV (decision review — always computed)
 
 When the villain's cards are not known, equity is estimated against their **inferred range**. The range is built from the villain's observed session VPIP/PFR/3-Bet stats blended with population priors:
 
@@ -174,9 +174,9 @@ $$\text{blended\_stat} = \frac{n \times \text{obs\_stat} + w \times \text{prior}
    - Aggressive villain action (bet/raise) → keep top 40% (`range_continue_pct_aggressive`).
 4. If fewer than 5 combos survive after contraction, the hand is skipped (no EV written).
 
-**Display**: Shows `Est. Equity: ~X%  Est. EV: ±Y` with a ℹ tooltip revealing the pre-flop range type, contracted range size, and sample count.
+**Display**: Shows `Est. Equity: ~X%  Est. EV: ±Y` with a ℹ tooltip revealing the pre-flop range type, contracted range size, and sample count. For CALL actions with negative EV, a *"[Fold was better ↑]"* hint appears. For FOLD actions, a verdict is shown instead (see § D Fold EV below). This is the **only EV shown in the action table** — range equity is always used for decision review, regardless of whether villain cards were revealed later.
 * **`ev_type = 'range'`** in `action_ev_cache`.
-* **`ev_type = 'range_multiway_approx'`** when the hand is multiway but villain cards are unknown — flags that the range-based equity is a heads-up approximation against the primary villain only.
+* **`ev_type = 'range_multiway_approx'`** when the hand is multiway (multiple active non-hero players) — flags that the range-based equity is a heads-up approximation against the primary villain only.
 
 ### C. EV Cache & Calculation Flow
 
@@ -186,7 +186,12 @@ EV is **not** computed on page load. It is computed explicitly via the **📊 Ca
 * EV is stable across page reloads (no re-computation).
 * The session list shows `✅ Ready (YYYY-MM-DD)` once EVs have been calculated.
 
-**Orchestrator**: `calculate_session_evs(db_path, session_id, hero_id, settings)` in `stats.py` — iterates over all hero CALL/BET/RAISE actions **and FOLD actions with `amount_to_call > 0`** in the session, identifies the primary villain via `identify_primary_villain`, detects multiway scenarios (multiple active villains with known cards → `compute_equity_multiway`), branches to exact or range path, and bulk-writes results via `save_action_evs`.
+**Orchestrator**: `calculate_session_evs(db_path, session_id, hero_id, settings)` in `stats.py` — iterates over all hero CALL/BET/RAISE actions **and FOLD actions with `amount_to_call > 0`** in the session, identifies the primary villain via `identify_primary_villain`, and computes **two independent EV tracks** per action:
+
+1. **Range track** (always): `ev_type = 'range'` / `'range_multiway_approx'` — used for the action table. Always computed, always based on villain's inferred range. Detects multiway via active player count.
+2. **All-in exact track** (conditional): `ev_type = 'allin_exact'` / `'allin_exact_multiway'` — used for Lucky/Unlucky variance summary. Only written when `is_all_in = 1` **and** villain cards are known. For multiway all-ins, uses `compute_equity_multiway()` against all revealed hands.
+
+Both tracks are written to `action_ev_cache` with the same `action_id` + `hero_id` but different `ev_type` (the PK is `(action_id, hero_id, ev_type)`). Results are bulk-written via `save_action_evs`.
 
 ### D. Fold EV (Was the Fold Correct?)
 
@@ -224,14 +229,14 @@ where $P(call) = 1 - P(fold)$.
 
 ### F. EV Summary Thresholds
 
-The Session Report EV Summary classifies each showdown hand as Lucky or Unlucky based on two thresholds, both configurable via **Settings → Analysis Settings**:
+The Session Report EV Summary classifies each **all-in hand** as Lucky or Unlucky based on two thresholds, both configurable via **Settings → Analysis Settings**:
 
 | Setting | DB Key | Default | Meaning |
 |:--------|:-------|:-------:|:--------|
 | Lucky equity threshold | `lucky_equity_threshold` | 40 (%) | Hero wins with equity < this % → 🍀 Lucky |
 | Unlucky equity threshold | `unlucky_equity_threshold` | 60 (%) | Hero loses with equity > this % → 😞 Unlucky |
 
-The query that feeds Lucky/Unlucky classification (`get_session_showdown_evs`) selects the **latest exact-EV action** per hand (highest `action_id` with `ev_type='exact'`), giving the most representative equity reading regardless of which street it occurred on.
+The query that feeds Lucky/Unlucky classification (`get_session_allin_evs`) selects the **latest allin_exact-EV action** per hand (highest `action_id` with `ev_type IN ('allin_exact', 'allin_exact_multiway')`), giving the most representative equity reading regardless of which street the all-in occurred. Hands without an all-in (or where villain cards were not revealed) do not appear in this summary.
 
 ---
 

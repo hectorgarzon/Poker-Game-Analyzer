@@ -1,6 +1,6 @@
 # EV Decoupling: Range Equity for Decisions, All-In EV for Variance
 
-> **Status:** 📋 Planning
+> **Status:** ✅ Implemented
 > **Branch:** `feat/ev-decoupling`
 > **Scope:** Decouple decision-review equity (always range-based) from variance-tracking equity (exact, all-in only). No backward-compatibility constraints.
 
