@@ -2940,6 +2940,82 @@ class TestCalculateSessionEvs:
         assert "allin_exact" not in ev_types
         assert "allin_exact_multiway" not in ev_types
 
+    def test_allin_exact_written_when_preflop_action_none(self, db_file):
+        """allin_exact must be written even when villain vpip=0 (preflop_action=None).
+
+        If the villain didn't VPIP preflop (e.g. they folded preflop in a
+        different hand, or their preflop action is simply not found), the
+        range EV track is skipped — but allin_exact should still be written
+        because it only needs the villain's hole cards, not a range.
+        """
+        conn, db_path = db_file
+        from pokerhero.analysis.stats import calculate_session_evs
+
+        hero_id = conn.execute(
+            "INSERT INTO players (username, preferred_name)"
+            " VALUES ('hero_pf0', 'HeroPF0')"
+        ).lastrowid
+        villain_id = conn.execute(
+            "INSERT INTO players (username, preferred_name)"
+            " VALUES ('vil_pf0', 'VilPF0')"
+        ).lastrowid
+        sid = conn.execute(
+            "INSERT INTO sessions"
+            " (game_type, limit_type, max_seats,"
+            "  small_blind, big_blind, ante, start_time)"
+            " VALUES ('NLHE', 'No Limit', 6, 50, 100, 0, '2024-09-01')"
+        ).lastrowid
+        hid = conn.execute(
+            "INSERT INTO hands"
+            " (source_hand_id, session_id, total_pot, uncalled_bet_returned,"
+            "  rake, timestamp, board_flop, board_turn, board_river)"
+            " VALUES ('PF01', ?, 2000, 0, 0, '2024-09-01T00:00:00',"
+            " 'Qs Jd 4h', NULL, NULL)",
+            (sid,),
+        ).lastrowid
+        conn.execute(
+            "INSERT INTO hand_players"
+            " (hand_id, player_id, position, starting_stack, hole_cards,"
+            "  vpip, pfr, three_bet, went_to_showdown, net_result)"
+            " VALUES (?, ?, 'BTN', 5000, 'Ac Kd', 1, 1, 0, 1, -1000)",
+            (hid, hero_id),
+        )
+        # vpip=0 → preflop_action will be None → range track skipped
+        conn.execute(
+            "INSERT INTO hand_players"
+            " (hand_id, player_id, position, starting_stack, hole_cards,"
+            "  vpip, pfr, three_bet, went_to_showdown, net_result)"
+            " VALUES (?, ?, 'BB', 5000, '2c 3d', 0, 0, 0, 1, 1000)",
+            (hid, villain_id),
+        )
+        # Villain has a preflop action so identify_primary_villain finds them
+        conn.execute(
+            "INSERT INTO actions"
+            " (hand_id, player_id, is_hero, street, action_type,"
+            "  amount, amount_to_call, pot_before, is_all_in, sequence)"
+            " VALUES (?, ?, 0, 'PREFLOP', 'CALL', 100, 100, 100, 0, 1)",
+            (hid, villain_id),
+        )
+        allin_action_id = conn.execute(
+            "INSERT INTO actions"
+            " (hand_id, player_id, is_hero, street, action_type,"
+            "  amount, amount_to_call, pot_before, is_all_in, sequence)"
+            " VALUES (?, ?, 1, 'FLOP', 'CALL', 1000, 1000, 800, 1, 2)",
+            (hid, hero_id),
+        ).lastrowid
+        conn.commit()
+
+        calculate_session_evs(db_path, sid, hero_id, self._FAST_SETTINGS)
+        rows = conn.execute(
+            "SELECT ev_type FROM action_ev_cache WHERE action_id = ? AND hero_id = ?",
+            (allin_action_id, hero_id),
+        ).fetchall()
+        ev_types = {r[0] for r in rows}
+        # allin_exact must be written even though range track was skipped
+        assert "allin_exact" in ev_types, (
+            f"Expected allin_exact row (villain vpip=0), got: {ev_types}"
+        )
+
 
 class TestGetSessionEvStatus:
     """Tests for get_session_ev_status query function."""

@@ -1384,3 +1384,20 @@ class TestActionEvCache:
             "SELECT COUNT(*) FROM action_ev_cache WHERE action_id = ?", (aid,)
         ).fetchone()[0]
         assert count == 2
+
+    def test_get_action_ev_no_ev_type_prefers_range(self, db, action_id):
+        """When ev_type=None, get_action_ev returns the range row preferentially.
+
+        With the 3-column PK a single (action_id, hero_id) can have both a
+        'range' row and an 'allin_exact' row.  Calling without ev_type must
+        always return the range track, not an arbitrary row.
+        """
+        from pokerhero.database.db import get_action_ev, save_action_evs
+
+        aid, hero_id = action_id
+        save_action_evs(db, [self._base_row(aid, hero_id, ev_type="allin_exact")])
+        save_action_evs(db, [self._base_row(aid, hero_id, ev_type="range")])
+        db.commit()
+        row = get_action_ev(db, aid, hero_id)
+        assert row is not None
+        assert row["ev_type"] == "range"
