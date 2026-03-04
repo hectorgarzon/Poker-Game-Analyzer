@@ -852,30 +852,31 @@ def calculate_session_evs(
                 else:
                     allin_pot_to_win = pot_to_win
 
-                villain_cards: str | None = known_villain_cards.get(villain_id)
-                if villain_cards is not None:
-                    allin_equity: float = 0.0
-                    allin_ev_type: str = ""
-                    if len(known_villain_cards) > 1:
-                        all_cards_str = "|".join(known_villain_cards.values())
-                        allin_equity = compute_equity_multiway(
-                            hero_cards, all_cards_str, board, sample_count
-                        )
-                        allin_ev_type = "allin_exact_multiway"
+                allin_equity: float = 0.0
+                allin_ev_type: str = ""
+                if len(known_villain_cards) > 1:
+                    all_cards_str = "|".join(known_villain_cards.values())
+                    allin_equity = compute_equity_multiway(
+                        hero_cards, all_cards_str, board, sample_count
+                    )
+                    allin_ev_type = "allin_exact_multiway"
+                else:
+                    # Exactly one villain hand is known — use it directly,
+                    # regardless of which player is the primary villain for range EV.
+                    sole_villain_cards = next(iter(known_villain_cards.values()))
+                    allin_result = compute_ev(
+                        hero_cards,
+                        sole_villain_cards,
+                        board,
+                        wager,
+                        allin_pot_to_win,
+                        sample_count,
+                    )
+                    if allin_result is None:
+                        pass  # compute_ev failed — skip allin_exact
                     else:
-                        allin_result = compute_ev(
-                            hero_cards,
-                            villain_cards,
-                            board,
-                            wager,
-                            allin_pot_to_win,
-                            sample_count,
-                        )
-                        if allin_result is None:
-                            pass  # compute_ev failed — skip allin_exact
-                        else:
-                            _, allin_equity = allin_result
-                            allin_ev_type = "allin_exact"
+                        _, allin_equity = allin_result
+                        allin_ev_type = "allin_exact"
 
                     if allin_ev_type:
                         # Fold equity is NOT applied here: villain cards are known
