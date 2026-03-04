@@ -1733,11 +1733,11 @@ class TestBuildEvSummary:
         assert "calculate" in text
 
     def test_nonempty_mentions_showdown(self):
-        """Non-empty ev_df mentions showdown in the output."""
+        """Non-empty ev_df no longer mentions 'showdown' — text uses 'all-in'."""
         from pokerhero.frontend.pages.sessions import _build_ev_summary
 
         text = str(_build_ev_summary(self._ev_df())).lower()
-        assert "showdown" in text
+        assert "showdown" not in text
 
     def test_nonempty_mentions_allin(self):
         """Non-empty ev_df should say 'all-in', not 'showdown'."""

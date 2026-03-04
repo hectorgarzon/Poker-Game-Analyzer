@@ -854,8 +854,8 @@ def calculate_session_evs(
 
                 villain_cards: str | None = known_villain_cards.get(villain_id)
                 if villain_cards is not None:
-                    allin_equity: float
-                    allin_ev_type: str
+                    allin_equity: float = 0.0
+                    allin_ev_type: str = ""
                     if len(known_villain_cards) > 1:
                         all_cards_str = "|".join(known_villain_cards.values())
                         allin_equity = compute_equity_multiway(

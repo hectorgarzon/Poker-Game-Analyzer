@@ -1935,6 +1935,7 @@ def _build_session_narrative(
 def _build_ev_summary(
     ev_df: pd.DataFrame,
     *,
+    ev_calculated: bool = False,
     lucky_threshold: float = 0.4,
     unlucky_threshold: float = 0.6,
 ) -> html.Div:
@@ -1945,8 +1946,12 @@ def _build_ev_summary(
 
     Args:
         ev_df: DataFrame from get_session_allin_evs (columns: hand_id,
-               source_hand_id, equity, net_result).  Empty means no all-in
-               EV data has been calculated yet.
+               source_hand_id, equity, net_result).  Empty means either no
+               all-in EV has been calculated yet, or EVs were calculated but
+               this session had no qualifying all-in spots with revealed cards.
+        ev_calculated: True when EVs have been calculated for this session
+               (action_ev_cache rows exist).  Used to distinguish "not yet
+               run" from "no all-in spots found".
         lucky_threshold: Hero wins with equity below this fraction → Lucky.
         unlucky_threshold: Hero loses with equity above this fraction → Unlucky.
 
@@ -1954,6 +1959,14 @@ def _build_ev_summary(
         html.Div with a luck verdict and all-in hand count.
     """
     if ev_df.empty:
+        if ev_calculated:
+            return html.Div(
+                html.P(
+                    "No all-in spots with revealed cards found in this session.",
+                    style={"fontSize": "13px", "color": "var(--text-4, #888)"},
+                ),
+                style={"marginBottom": "20px"},
+            )
         return html.Div(
             [
                 html.P(
@@ -2003,7 +2016,7 @@ def _build_ev_summary(
                 style={"marginBottom": "6px", "color": "var(--text-2, #333)"},
             ),
             html.P(
-                f"{n} showdown {hand_word} with cached exact EV.",
+                f"{n} all-in {hand_word} with exact EV.",
                 style={
                     "fontSize": "13px",
                     "color": "var(--text-3, #555)",
@@ -2137,6 +2150,7 @@ def _render_session_report(db_path: str, session_id: int) -> tuple[html.Div | st
 
     from pokerhero.analysis.queries import (
         get_session_allin_evs,
+        get_session_ev_status,
         get_session_hero_actions,
         get_session_kpis,
     )
@@ -2146,6 +2160,7 @@ def _render_session_report(db_path: str, session_id: int) -> tuple[html.Div | st
         kpis_df = get_session_kpis(conn, session_id, player_id)
         actions_df = get_session_hero_actions(conn, session_id, player_id)
         ev_df = get_session_allin_evs(conn, session_id, int(player_id))
+        ev_count, _ = get_session_ev_status(conn, session_id)
         pos_table = _build_session_position_table(kpis_df, conn)
         s = _read_analysis_settings(db_path)
     finally:
@@ -2164,6 +2179,7 @@ def _render_session_report(db_path: str, session_id: int) -> tuple[html.Div | st
             pos_table,
             _build_ev_summary(
                 ev_df,
+                ev_calculated=ev_count > 0,
                 lucky_threshold=lucky_threshold,
                 unlucky_threshold=unlucky_threshold,
             ),
