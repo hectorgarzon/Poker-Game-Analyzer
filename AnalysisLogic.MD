@@ -215,7 +215,7 @@ where $P(call) = 1 - P(fold)$.
 
 **Fold probability estimation**: Uses `fold_equity_default_pct` setting (default 40%). This is a population-level default; future versions may use per-villain fold-to-bet statistics when available.
 
-**Storage**: `fold_equity_pct` column in `action_ev_cache` (nullable). Set for BET/RAISE actions; NULL for CALL/FOLD.
+**Storage**: `fold_equity_pct` column in `action_ev_cache` (nullable). Set for BET/RAISE actions on **range-based** EV rows (`range`, `range_multiway_approx`); NULL for CALL/FOLD and always NULL for `allin_exact`/`allin_exact_multiway` rows (villain cards are known because they called, so fold probability is 0 by definition).
 
 ### E. Equity Calculation Detail
 
