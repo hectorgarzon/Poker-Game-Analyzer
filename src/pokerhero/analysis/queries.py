@@ -109,42 +109,33 @@ def get_hands(
                   AND a.player_id = hp.player_id
                   AND a.street = 'FLOP'
             ) THEN 1 ELSE 0 END AS saw_flop,
-            COALESCE((
-                SELECT MAX(CASE WHEN a.action_type = 'CALL' AND aec.ev < 0
-                               THEN 1 ELSE 0 END)
-                FROM actions a
-                JOIN action_ev_cache aec
-                  ON aec.action_id = a.id AND aec.hero_id = hp.player_id
-                WHERE a.hand_id = h.id
-                  AND a.player_id = hp.player_id
-                  AND aec.ev_type IN ('range', 'range_multiway_approx')
-            ), 0) AS has_bad_call,
-            COALESCE((
-                SELECT MAX(CASE WHEN a.action_type = 'CALL' AND aec.ev > 0
-                               THEN 1 ELSE 0 END)
-                FROM actions a
-                JOIN action_ev_cache aec
-                  ON aec.action_id = a.id AND aec.hero_id = hp.player_id
-                WHERE a.hand_id = h.id
-                  AND a.player_id = hp.player_id
-                  AND aec.ev_type IN ('range', 'range_multiway_approx')
-            ), 0) AS has_good_call,
-            COALESCE((
-                SELECT MAX(CASE WHEN a.action_type = 'FOLD' AND aec.ev > 0
-                               THEN 1 ELSE 0 END)
-                FROM actions a
-                JOIN action_ev_cache aec
-                  ON aec.action_id = a.id AND aec.hero_id = hp.player_id
-                WHERE a.hand_id = h.id
-                  AND a.player_id = hp.player_id
-                  AND aec.ev_type IN ('range', 'range_multiway_approx')
-            ), 0) AS has_bad_fold
+            COALESCE(ev_flags.has_bad_call,  0) AS has_bad_call,
+            COALESCE(ev_flags.has_good_call, 0) AS has_good_call,
+            COALESCE(ev_flags.has_bad_fold,  0) AS has_bad_fold
         FROM hands h
         LEFT JOIN hand_players hp ON hp.hand_id = h.id AND hp.player_id = ?
+        LEFT JOIN (
+            SELECT
+                a.hand_id,
+                aec.hero_id,
+                MAX(CASE WHEN a.action_type = 'CALL' AND aec.ev < 0 THEN 1 ELSE 0 END)
+                    AS has_bad_call,
+                MAX(CASE WHEN a.action_type = 'CALL' AND aec.ev > 0 THEN 1 ELSE 0 END)
+                    AS has_good_call,
+                MAX(CASE WHEN a.action_type = 'FOLD' AND aec.ev > 0 THEN 1 ELSE 0 END)
+                    AS has_bad_fold
+            FROM actions a
+            JOIN action_ev_cache aec
+              ON aec.action_id = a.id
+             AND aec.ev_type IN ('range', 'range_multiway_approx')
+            GROUP BY a.hand_id, aec.hero_id
+        ) ev_flags ON ev_flags.hand_id = h.id AND ev_flags.hero_id = ?
         WHERE h.session_id = ?
         ORDER BY h.timestamp ASC
     """
-    return pd.read_sql_query(sql, conn, params=(int(player_id), int(session_id)))
+    return pd.read_sql_query(
+        sql, conn, params=(int(player_id), int(player_id), int(session_id))
+    )
 
 
 def get_actions(conn: sqlite3.Connection, hand_id: int) -> pd.DataFrame:

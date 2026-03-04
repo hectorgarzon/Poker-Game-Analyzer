@@ -379,7 +379,14 @@ def get_action_ev(
         ).fetchone()
     else:
         row = conn.execute(
-            "SELECT * FROM action_ev_cache WHERE action_id = ? AND hero_id = ?",
+            "SELECT * FROM action_ev_cache WHERE action_id = ? AND hero_id = ?"
+            " ORDER BY CASE ev_type"
+            " WHEN 'range' THEN 0"
+            " WHEN 'range_multiway_approx' THEN 1"
+            " WHEN 'allin_exact' THEN 2"
+            " WHEN 'allin_exact_multiway' THEN 3"
+            " ELSE 4 END"
+            " LIMIT 1",
             (action_id, hero_id),
         ).fetchone()
     return dict(row) if row is not None else None

@@ -1348,7 +1348,7 @@ class TestActionEvCache:
         from pokerhero.database.db import save_action_evs
 
         aid, hero_id = action_id
-        # Should not raise — currently raises because 'allin_exact' not in CHECK
+        # Should not raise (previously failed before 'allin_exact' was added to CHECK)
         save_action_evs(db, [self._base_row(aid, hero_id, ev_type="allin_exact")])
         db.commit()
         count = db.execute(
@@ -1377,7 +1377,7 @@ class TestActionEvCache:
 
         aid, hero_id = action_id
         save_action_evs(db, [self._base_row(aid, hero_id, ev_type="range")])
-        # Should not raise (old PK would have raised UNIQUE constraint)
+        # Should not raise; current schema allows multiple EV rows per action.
         save_action_evs(db, [self._base_row(aid, hero_id, ev_type="allin_exact")])
         db.commit()
         count = db.execute(

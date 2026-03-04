@@ -72,6 +72,17 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 
+-- NOTE: All tables use CREATE TABLE IF NOT EXISTS, so this script is
+-- idempotent for additive changes.  However, structural changes such as
+-- modifying a PRIMARY KEY or a CHECK constraint cannot be applied to an
+-- existing database by re-running this script — SQLite does not support
+-- ALTER TABLE for those operations.  If you upgrade from an older schema
+-- version that had a different PK or CHECK on action_ev_cache (e.g. PK on
+-- just (action_id, hero_id)), you must drop and recreate the table (or
+-- clear the database with "Clear Database" in Settings) before the new
+-- schema takes effect.  Since this project is single-user and hand history
+-- files can be re-ingested from disk, a full DB reset is the recommended
+-- migration path.
 CREATE TABLE IF NOT EXISTS action_ev_cache (
     action_id              INTEGER NOT NULL REFERENCES actions(id),
     hero_id                INTEGER NOT NULL REFERENCES players(id),

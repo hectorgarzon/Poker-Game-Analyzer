@@ -827,6 +827,64 @@ def calculate_session_evs(
             ).fetchall()
             known_villain_cards = {int(r[0]): str(r[1]) for r in all_villain_cards_rows}
 
+            # ── Track 2: All-In Exact EV (variance tracking) ─────────────────
+            # Only for all-in actions where villain cards are known.
+            # Computed BEFORE the range-track guard so it is never skipped due
+            # to preflop_action being unavailable (e.g. villain vpip=0).
+            if is_all_in and known_villain_cards:
+                villain_cards: str | None = known_villain_cards.get(villain_id)
+                if villain_cards is not None:
+                    allin_equity: float
+                    allin_ev_type: str
+                    if len(known_villain_cards) > 1:
+                        all_cards_str = "|".join(known_villain_cards.values())
+                        allin_equity = compute_equity_multiway(
+                            hero_cards, all_cards_str, board, sample_count
+                        )
+                        allin_ev_type = "allin_exact_multiway"
+                    else:
+                        allin_result = compute_ev(
+                            hero_cards,
+                            villain_cards,
+                            board,
+                            wager,
+                            pot_to_win,
+                            sample_count,
+                        )
+                        if allin_result is None:
+                            allin_equity = 0.0  # unreachable branch — skip below
+                            allin_ev_type = ""
+                        else:
+                            _, allin_equity = allin_result
+                            allin_ev_type = "allin_exact"
+
+                    if allin_ev_type:
+                        allin_ev = allin_equity * pot_to_win - wager
+
+                        fold_eq_pct_allin: float | None = None
+                        if action_type in ("BET", "RAISE"):
+                            fold_eq_pct_allin = fold_equity_default
+                            p_fold = fold_eq_pct_allin / 100.0
+                            allin_ev = p_fold * pot_before + (1.0 - p_fold) * allin_ev
+
+                        rows.append(
+                            {
+                                "action_id": action_id,
+                                "hero_id": hero_id,
+                                "equity": allin_equity,
+                                "ev": allin_ev,
+                                "ev_type": allin_ev_type,
+                                "blended_vpip": None,
+                                "blended_pfr": None,
+                                "blended_3bet": None,
+                                "villain_preflop_action": None,
+                                "contracted_range_size": None,
+                                "fold_equity_pct": fold_eq_pct_allin,
+                                "sample_count": sample_count,
+                                "computed_at": now,
+                            }
+                        )
+
             # ── Track 1: Range EV (always computed — decision review) ──────────
             preflop_action = _get_villain_preflop_action(conn, hand_id, villain_id)
             if preflop_action is None:
@@ -917,61 +975,6 @@ def calculate_session_evs(
                         "villain_preflop_action": preflop_action,
                         "contracted_range_size": contracted_size,
                         "fold_equity_pct": fold_eq_pct_r,
-                        "sample_count": sample_count,
-                        "computed_at": now,
-                    }
-                )
-
-            # ── Track 2: All-In Exact EV (variance tracking) ─────────────────
-            # Only for all-in actions where villain cards are known.
-            if is_all_in and known_villain_cards:
-                villain_cards: str | None = known_villain_cards.get(villain_id)
-                if villain_cards is None:
-                    # Primary villain's cards not known; skip allin_exact
-                    continue
-
-                if len(known_villain_cards) > 1:
-                    all_cards_str = "|".join(known_villain_cards.values())
-                    allin_equity = compute_equity_multiway(
-                        hero_cards, all_cards_str, board, sample_count
-                    )
-                    allin_ev_type = "allin_exact_multiway"
-                else:
-                    allin_result = compute_ev(
-                        hero_cards,
-                        villain_cards,
-                        board,
-                        wager,
-                        pot_to_win,
-                        sample_count,
-                    )
-                    if allin_result is None:
-                        continue
-                    _, allin_equity = allin_result
-                    allin_ev_type = "allin_exact"
-
-                allin_ev = allin_equity * pot_to_win - wager
-
-                # Apply fold equity for BET/RAISE (same formula as range track)
-                fold_eq_pct_allin: float | None = None
-                if action_type in ("BET", "RAISE"):
-                    fold_eq_pct_allin = fold_equity_default
-                    p_fold = fold_eq_pct_allin / 100.0
-                    allin_ev = p_fold * pot_before + (1.0 - p_fold) * allin_ev
-
-                rows.append(
-                    {
-                        "action_id": action_id,
-                        "hero_id": hero_id,
-                        "equity": allin_equity,
-                        "ev": allin_ev,
-                        "ev_type": allin_ev_type,
-                        "blended_vpip": None,
-                        "blended_pfr": None,
-                        "blended_3bet": None,
-                        "villain_preflop_action": None,
-                        "contracted_range_size": None,
-                        "fold_equity_pct": fold_eq_pct_allin,
                         "sample_count": sample_count,
                         "computed_at": now,
                     }
