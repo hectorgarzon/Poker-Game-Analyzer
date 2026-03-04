@@ -113,14 +113,14 @@ A narrative overview of your performance in the selected session, before you div
 
 **Narrative paragraph** — a short written summary describing your VPIP, PFR, AF and overall win/loss rate for the session.
 
-**EV Summary** — shows how your results compared to your equity at key decision points. First, click **📊 Calculate EVs** to compute EV for the session (this runs once and is saved — subsequent views are instant):
+**EV Summary** — shows how your results compared to your equity in **all-in situations** where villain cards were revealed. First, click **📊 Calculate EVs** to compute EV for the session (this runs once and is saved — subsequent views are instant):
 - 👍 **Ran above equity** — you won more than your equity predicted (ran good).
 - 👎 **Ran below equity** — you won less than your equity predicted (ran bad).
 - **~** **Ran near equity** — results were consistent with your equity.
 
-> A hand is classified as *Lucky* when you won with < 40% equity, and *Unlucky* when you lost with > 60% equity. These thresholds are configurable in **Settings → Analysis Settings**.
+> A hand is classified as *Lucky* when you won with < 40% equity at the all-in moment, and *Unlucky* when you lost with > 60% equity. Only all-in hands where villain cards were revealed are included. Thresholds are configurable in **Settings → Analysis Settings**.
 
-**Notable Hands** — a list of any individual hands flagged as Lucky (🍀) or Unlucky (😞), showing the hand ID and your equity at the time.
+**Notable Hands** — a list of any individual all-in hands flagged as Lucky (🍀) or Unlucky (😞), showing the hand ID and your equity at the all-in moment.
 
 **📊 Calculate EVs** — click this button to compute and save EV for every hero action in the session. The session list will show `✅ Ready (date)` once done. Calculation only needs to run once per session; results persist in the database.
 
@@ -135,6 +135,7 @@ All hands from the selected session. Each row shows the Hand ID, your hole cards
 | Saw Flop | Show only hands where you saw the flop. |
 | Showdown | Show only hands that went to showdown. |
 | ★ Favourites only | Show only hands you have starred. |
+| EV quality | Filter by action quality: **⚠ Bad call (−EV)** shows hands where you called but the range EV was negative; **✓ Good call (+EV)** shows hands where your call had positive range EV; **⚠ Bad fold (should call)** shows hands where your fold had positive calling EV. Multiple values use OR logic. Only applies to hands with calculated EV data. |
 
 Use the breadcrumb trail at the top to navigate back to the session report or the session list.
 
@@ -153,8 +154,7 @@ Each action row shows:
   - **MDF%** — the % of your range you must continue with to prevent the villain profiting purely from bluffs.
   - **SPR** — shown once at the start of the Flop; how many pot-sized bets deep the stacks are.
   - **EV** — shown on hero CALL/BET/RAISE/FOLD actions after EVs have been calculated (use **📊 Calculate EVs** on the session report):
-    - **Exact EV** (`Equity: X%  EV: ±Y`): villain's cards were known. For CALL actions with negative EV, a *"[Fold was better ↑]"* hint appears.
-    - **Est. EV** (`Est. Equity: ~X%  Est. EV: ±Y`): villain's cards were unknown; equity estimated from their inferred range. Hover the ℹ icon to see the pre-flop range type and contracted range size.
+    - **Est. EV** (`Est. Equity: ~X%  Est. EV: ±Y`): equity estimated from the villain's inferred range — always shown for every hero action. Hover the ℹ icon to see the pre-flop range type and contracted range size. For CALL actions with negative EV, a *"[Fold was better ↑]"* hint appears.
     - **Fold verdict** (FOLD actions facing a bet): `✓ Good fold (call EV: −X)` in green, or `⚠ Should have called (call EV: +X)` in red — shows whether calling would have been +EV.
 
 ---
@@ -286,10 +286,11 @@ $$EV = (Equity \times Pot_{to\_win}) - ((1 - Equity) \times Wager)$$
 Shown on hero CALL/BET/RAISE actions once EVs have been calculated for the session. Positive EV (green) = the action was profitable long-term. Negative EV (red) = the action lost expected value. `—` when no EV has been calculated for this action.
 
 Two display modes:
-- **Exact EV** — villain's cards were known (showdown/all-in). Equity is calculated via Monte Carlo simulation against their actual cards.
-- **Est. EV** — villain's cards were unknown. Equity is estimated by building a range from their session VPIP/PFR/3-Bet stats (blended with population priors) and contracting it street by street based on their actions. Hover the ℹ icon for details.
+- **Est. EV** — the only EV shown in the action table. Equity is estimated by building a range from the villain's session VPIP/PFR/3-Bet stats (blended with population priors) and contracting it street by street based on their actions. This reflects what you could have reasonably known at the time of the decision. Hover the ℹ icon for details.
 
-For CALL actions with **negative exact EV**, a *"[Fold was better ↑]"* hint is shown — the fold option had higher expected value.
+For CALL actions with **negative estimated EV**, a *"[Fold was better ↑]"* hint is shown.
+
+> **All-In EV**: For hands where you went all-in and the villain's cards were revealed, the EV Summary section uses *exact* equity (computed against villain's actual cards at the all-in moment) for Lucky/Unlucky classification. This is separate from the action table display.
 
 For **FOLD actions facing a bet**, the EV column shows a verdict: **✓ Good fold (call EV: −X)** (green) when calling would have been −EV, or **⚠ Should have called (call EV: +X)** (red) when calling would have been +EV.
 

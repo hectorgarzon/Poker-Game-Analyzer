@@ -66,8 +66,8 @@ A narrative overview of the selected session, assembled from three query DataFra
 * **Narrative paragraph** — template-driven sentence summarising VPIP%, PFR%, AF and win rate for the session. Built by `_build_session_narrative(kpis_df, actions_df, session_label)`.
 * **KPI strip** — five at-a-glance cards (Hands, VPIP%, PFR%, AF, Win Rate bb/100). Built by `_build_session_kpi_strip(kpis_df, actions_df)`.
 * **Position Breakdown Table** ✅ Implemented — compact per-position VPIP% / PFR% / Net P&L table with traffic-light background colouring (same green/yellow/red palette as the dashboard). Positions with no hands are omitted. Built by `_build_session_position_table(kpis_df, conn)` in `sessions.py`.
-* **EV Summary** — equity-based luck indicator. For each showdown hand with known villain cards, computes `compute_equity(hero_cards, villain_cards, board, 2000)`. Lucky: won with eq < 0.4. Unlucky: lost with eq > 0.6. Verdict: `👍 Ran above equity` / `👎 Ran below equity` / `~ Ran near equity`. Built by `_build_ev_summary(showdown_df)`.
-* **Notable Hands** — lists each hand classified as 🍀 Lucky or 😞 Unlucky with the equity percentage. Each entry is a clickable link that navigates to the hand action view (`/sessions?session_id=X&hand_id=Y`). Built by `_build_flagged_hands_list(showdown_df, session_id=session_id)`.
+* **EV Summary** — equity-based luck indicator. For each **all-in hand** where villain cards were revealed, uses the precomputed `allin_exact` EV from `action_ev_cache`. Lucky: hero won with equity < 0.4. Unlucky: hero lost with equity > 0.6. Verdict: `👍 Ran above equity` / `👎 Ran below equity` / `~ Ran near equity`. Data comes from `get_session_allin_evs`. Built by `_build_ev_summary(ev_df)`.
+* **Notable Hands** — lists each all-in hand classified as 🍀 Lucky or 😞 Unlucky with the equity percentage at the all-in moment. Each entry is a clickable link that navigates to the hand action view (`/sessions?session_id=X&hand_id=Y`). Built by `_build_flagged_hands_list(ev_df, session_id=session_id)`.
 * **Browse all N hands button** (`session-report-browse-btn`) — navigates to the Hand List for this session via `_browse_session_hands` callback.
 * State: `level="report"`, `session_id=X`.
 
@@ -76,7 +76,7 @@ A detailed list of every hand dealt in that session.
 * **Columns**: Hand ID, Hero Cards (Hole Cards with suit symbols), Final Pot, Net Result.
 * **Sorting** ✅ Implemented — click any column header to sort ascending/descending.
 * **Action**: Clicking any cell in a row navigates to the **Hand Action View**.
-* **Filters** ✅ Implemented — filter bar: P&L min/max, position multiselect, Saw Flop checkbox, Showdown checkbox, Favourites only. Updates table without page reload via `_apply_hand_filters` callback + `hand-data-store`.
+* **Filters** ✅ Implemented — filter bar: P&L min/max, position multiselect, Saw Flop checkbox, Showdown checkbox, Favourites only, EV quality multiselect (bad_call/good_call/bad_fold, OR logic, uses `has_bad_call`/`has_good_call`/`has_bad_fold` columns from `get_hands`). Updates table without page reload via `_apply_hand_filters` callback + `hand-data-store`.
 * **Breadcrumb**: `Sessions > Session Label (→ report) > All Hands`.
 
 ### Level 4: Hand Action View ✅

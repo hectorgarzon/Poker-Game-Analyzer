@@ -73,7 +73,13 @@ def get_hands(
 
     Columns: id, source_hand_id, timestamp, board_flop, board_turn,
              board_river, total_pot, net_result, hole_cards, position,
-             went_to_showdown, saw_flop.
+             went_to_showdown, saw_flop, has_bad_call, has_good_call,
+             has_bad_fold.
+
+    EV flag columns (0 or 1) reflect range-EV data from action_ev_cache:
+      has_bad_call  — hero made a CALL with negative range EV
+      has_good_call — hero made a CALL with positive range EV
+      has_bad_fold  — hero folded when calling had positive range EV
 
     Args:
         conn: Open SQLite connection.
@@ -102,13 +108,37 @@ def get_hands(
                 WHERE a.hand_id = h.id
                   AND a.player_id = hp.player_id
                   AND a.street = 'FLOP'
-            ) THEN 1 ELSE 0 END AS saw_flop
+            ) THEN 1 ELSE 0 END AS saw_flop,
+            COALESCE(ev_flags.has_bad_call,  0) AS has_bad_call,
+            COALESCE(ev_flags.has_good_call, 0) AS has_good_call,
+            COALESCE(ev_flags.has_bad_fold,  0) AS has_bad_fold
         FROM hands h
         LEFT JOIN hand_players hp ON hp.hand_id = h.id AND hp.player_id = ?
+        LEFT JOIN (
+            SELECT
+                a.hand_id,
+                MAX(CASE WHEN a.action_type = 'CALL' AND aec.ev < 0 THEN 1 ELSE 0 END)
+                    AS has_bad_call,
+                MAX(CASE WHEN a.action_type = 'CALL' AND aec.ev > 0 THEN 1 ELSE 0 END)
+                    AS has_good_call,
+                MAX(CASE WHEN a.action_type = 'FOLD' AND aec.ev > 0 THEN 1 ELSE 0 END)
+                    AS has_bad_fold
+            FROM actions a
+            JOIN action_ev_cache aec
+              ON aec.action_id = a.id
+             AND aec.hero_id = ?
+             AND aec.ev_type IN ('range', 'range_multiway_approx')
+            JOIN hands h2 ON h2.id = a.hand_id AND h2.session_id = ?
+            GROUP BY a.hand_id
+        ) ev_flags ON ev_flags.hand_id = h.id
         WHERE h.session_id = ?
         ORDER BY h.timestamp ASC
     """
-    return pd.read_sql_query(sql, conn, params=(int(player_id), int(session_id)))
+    return pd.read_sql_query(
+        sql,
+        conn,
+        params=(int(player_id), int(player_id), int(session_id), int(session_id)),
+    )
 
 
 def get_actions(conn: sqlite3.Connection, hand_id: int) -> pd.DataFrame:
@@ -679,18 +709,17 @@ def get_session_ev_status(
     return count, computed_at
 
 
-def get_session_showdown_evs(
+def get_session_allin_evs(
     conn: sqlite3.Connection,
     session_id: int,
     hero_id: int,
 ) -> pd.DataFrame:
-    """Return one exact-EV row per hand for Lucky/Unlucky classification.
+    """Return one allin-exact-EV row per hand for Lucky/Unlucky classification.
 
-    Queries ``action_ev_cache`` for exact EV types (``'exact'`` and
-    ``'exact_multiway'``) across all streets.  One row per hand is
-    returned — the latest qualifying action by
-    action id (i.e. the last decision point, which is most representative for
-    Lucky/Unlucky classification).
+    Queries ``action_ev_cache`` for all-in exact EV types
+    (``'allin_exact'`` and ``'allin_exact_multiway'``).  One row per hand is
+    returned — the latest qualifying action by action id (i.e. the last
+    all-in decision point).
 
     Columns: hand_id, source_hand_id, equity, net_result.
 
@@ -700,7 +729,7 @@ def get_session_showdown_evs(
         hero_id: Internal integer id of the hero player row.
 
     Returns:
-        DataFrame with one row per hand that has an exact EV cached.
+        DataFrame with one row per hand that has an allin_exact EV cached.
     """
     sql = """
         SELECT
@@ -716,14 +745,14 @@ def get_session_showdown_evs(
            AND hero_hp.player_id = :hero
         WHERE h.session_id = :sid
           AND aec.hero_id  = :hero
-          AND aec.ev_type  IN ('exact', 'exact_multiway')
+          AND aec.ev_type  IN ('allin_exact', 'allin_exact_multiway')
           AND a.id = (
               SELECT MAX(a2.id)
               FROM action_ev_cache aec2
               JOIN actions a2 ON aec2.action_id = a2.id
               WHERE a2.hand_id = h.id
                 AND aec2.hero_id = :hero
-                AND aec2.ev_type IN ('exact', 'exact_multiway')
+                AND aec2.ev_type IN ('allin_exact', 'allin_exact_multiway')
           )
         ORDER BY h.id ASC
     """

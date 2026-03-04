@@ -793,6 +793,7 @@ def calculate_session_evs(
             pot_before = float(ar["pot_before"])
             # For CALL/FOLD: wager = amount_to_call; for BET/RAISE: wager = amount
             action_type = str(ar["action_type"])
+            is_all_in = bool(ar["is_all_in"])
             wager = amount_to_call if action_type in ("CALL", "FOLD") else amount
             pot_to_win = pot_before + wager
 
@@ -826,114 +827,135 @@ def calculate_session_evs(
             ).fetchall()
             known_villain_cards = {int(r[0]): str(r[1]) for r in all_villain_cards_rows}
 
-            villain_cards: str | None = known_villain_cards.get(villain_id)
+            # ── Track 2: All-In Exact EV (variance tracking) ─────────────────
+            # Only for all-in actions where villain cards are known.
+            # Computed BEFORE the range-track guard so it is never skipped due
+            # to preflop_action being unavailable (e.g. villain vpip=0).
+            if is_all_in and known_villain_cards:
+                # pot_to_win must include subsequent villain calls behind the
+                # hero's action (for BET/RAISE: not yet in pot; for CALL:
+                # other villains may call behind in multiway spots).
+                villain_calls_row = conn.execute(
+                    """
+                    SELECT COALESCE(SUM(amount), 0.0)
+                    FROM actions
+                    WHERE hand_id = ? AND player_id != ? AND street = ?
+                      AND action_type = 'CALL' AND sequence > ?
+                    """,
+                    (hand_id, hero_id, street, int(ar["sequence"])),
+                ).fetchone()
+                allin_pot_to_win = (
+                    pot_to_win + float(villain_calls_row[0])
+                    if villain_calls_row
+                    else pot_to_win
+                )
 
-            if villain_cards:
+                allin_equity: float = 0.0
+                allin_ev_type: str = ""
                 if len(known_villain_cards) > 1:
-                    # Multiway exact: use all known villain hands
                     all_cards_str = "|".join(known_villain_cards.values())
-                    equity = compute_equity_multiway(
+                    allin_equity = compute_equity_multiway(
                         hero_cards, all_cards_str, board, sample_count
                     )
-                    ev = equity * pot_to_win - wager
-                    ev_type = "exact_multiway"
+                    allin_ev_type = "allin_exact_multiway"
                 else:
-                    result = compute_ev(
+                    # Exactly one villain hand is known — use it directly,
+                    # regardless of which player is the primary villain for range EV.
+                    sole_villain_cards = next(iter(known_villain_cards.values()))
+                    allin_result = compute_ev(
                         hero_cards,
-                        villain_cards,
+                        sole_villain_cards,
                         board,
                         wager,
-                        pot_to_win,
+                        allin_pot_to_win,
                         sample_count,
                     )
-                    if result is None:
-                        continue
-                    ev, equity = result
-                    ev_type = "exact"
+                    if allin_result is None:
+                        pass  # compute_ev failed — skip allin_exact
+                    else:
+                        _, allin_equity = allin_result
+                        allin_ev_type = "allin_exact"
 
-                # Apply fold equity for BET/RAISE actions
-                fold_eq_pct: float | None = None
-                if action_type in ("BET", "RAISE"):
-                    fold_eq_pct = fold_equity_default
-                    p_fold = fold_eq_pct / 100.0
-                    showdown_ev = equity * pot_to_win - wager
-                    ev = p_fold * pot_before + (1.0 - p_fold) * showdown_ev
+                if allin_ev_type:
+                    # Fold equity is NOT applied here: villain cards are known
+                    # because they called the all-in, so fold probability is 0.
+                    allin_ev = allin_equity * allin_pot_to_win - wager
+                    rows.append(
+                        {
+                            "action_id": action_id,
+                            "hero_id": hero_id,
+                            "equity": allin_equity,
+                            "ev": allin_ev,
+                            "ev_type": allin_ev_type,
+                            "blended_vpip": None,
+                            "blended_pfr": None,
+                            "blended_3bet": None,
+                            "villain_preflop_action": None,
+                            "contracted_range_size": None,
+                            "fold_equity_pct": None,
+                            "sample_count": sample_count,
+                            "computed_at": now,
+                        }
+                    )
 
-                rows.append(
-                    {
-                        "action_id": action_id,
-                        "hero_id": hero_id,
-                        "equity": equity,
-                        "ev": ev,
-                        "ev_type": ev_type,
-                        "blended_vpip": None,
-                        "blended_pfr": None,
-                        "blended_3bet": None,
-                        "villain_preflop_action": None,
-                        "contracted_range_size": None,
-                        "fold_equity_pct": fold_eq_pct,
-                        "sample_count": sample_count,
-                        "computed_at": now,
-                    }
-                )
-            else:
-                preflop_action = _get_villain_preflop_action(conn, hand_id, villain_id)
-                if preflop_action is None:
-                    continue
+            # ── Track 1: Range EV (always computed — decision review) ──────────
+            preflop_action = _get_villain_preflop_action(conn, hand_id, villain_id)
+            if preflop_action is None:
+                continue
 
-                n_hands, obs_vpip, obs_pfr, obs_3bet = _get_villain_session_stats(
-                    conn, session_id, villain_id
-                )
-                blended_v = blend_vpip(
-                    obs_vpip if n_hands > 0 else None, n_hands, vpip_prior, prior_weight
-                )
-                blended_p = blend_pfr(
-                    obs_pfr if n_hands > 0 else None, n_hands, pfr_prior, prior_weight
-                )
-                blended_3b = blend_3bet(
-                    obs_3bet if n_hands > 0 else None,
-                    n_hands,
-                    three_bet_prior,
-                    prior_weight,
-                )
+            n_hands, obs_vpip, obs_pfr, obs_3bet = _get_villain_session_stats(
+                conn, session_id, villain_id
+            )
+            blended_v = blend_vpip(
+                obs_vpip if n_hands > 0 else None, n_hands, vpip_prior, prior_weight
+            )
+            blended_p = blend_pfr(
+                obs_pfr if n_hands > 0 else None, n_hands, pfr_prior, prior_weight
+            )
+            blended_3b = blend_3bet(
+                obs_3bet if n_hands > 0 else None,
+                n_hands,
+                three_bet_prior,
+                prior_weight,
+            )
 
-                street_history = _build_villain_street_history(
-                    conn,
-                    hand_id,
-                    villain_id,
-                    street,
-                    ar.get("board_flop"),
-                    ar.get("board_turn"),
-                )
+            street_history = _build_villain_street_history(
+                conn,
+                hand_id,
+                villain_id,
+                street,
+                ar.get("board_flop"),
+                ar.get("board_turn"),
+            )
 
-                equity, contracted_size = compute_equity_vs_range(
-                    hero_cards=hero_cards,
-                    board=board,
-                    vpip_pct=blended_v,
-                    pfr_pct=blended_p,
-                    three_bet_pct=blended_3b,
-                    villain_preflop_action=preflop_action,
-                    villain_street_history=street_history,
-                    four_bet_prior=four_bet_prior,
-                    sample_count=sample_count,
-                    continue_pct_passive=cont_passive,
-                    continue_pct_aggressive=cont_aggressive,
-                )
-                if contracted_size < 5:
-                    continue
-
-                # Count active non-hero villains to detect multiway
+            range_equity, contracted_size = compute_equity_vs_range(
+                hero_cards=hero_cards,
+                board=board,
+                vpip_pct=blended_v,
+                pfr_pct=blended_p,
+                three_bet_pct=blended_3b,
+                villain_preflop_action=preflop_action,
+                villain_street_history=street_history,
+                four_bet_prior=four_bet_prior,
+                sample_count=sample_count,
+                continue_pct_passive=cont_passive,
+                continue_pct_aggressive=cont_aggressive,
+            )
+            if contracted_size >= 5:
+                # Count active non-hero villains to detect multiway.
+                # Use actions table (not hand_players) so players whose fold
+                # was not parsed are not incorrectly counted as active.
                 active_count = conn.execute(
                     """
-                    SELECT COUNT(DISTINCT hp.player_id)
-                    FROM hand_players hp
-                    WHERE hp.hand_id = :hid
-                      AND hp.player_id != :hero
-                      AND hp.player_id NOT IN (
-                          SELECT a.player_id FROM actions a
-                          WHERE a.hand_id = :hid
-                            AND a.action_type = 'FOLD'
-                            AND a.sequence < :seq
+                    SELECT COUNT(DISTINCT a.player_id)
+                    FROM actions a
+                    WHERE a.hand_id = :hid
+                      AND a.player_id != :hero
+                      AND a.player_id NOT IN (
+                          SELECT a2.player_id FROM actions a2
+                          WHERE a2.hand_id = :hid
+                            AND a2.action_type = 'FOLD'
+                            AND a2.sequence < :seq
                       )
                     """,
                     {
@@ -944,22 +966,21 @@ def calculate_session_evs(
                 ).fetchone()[0]
                 range_ev_type = "range_multiway_approx" if active_count > 1 else "range"
 
-                ev = equity * pot_to_win - wager
+                range_ev = range_equity * pot_to_win - wager
 
-                # Apply fold equity for BET/RAISE actions
+                # Apply fold equity for BET/RAISE
                 fold_eq_pct_r: float | None = None
                 if action_type in ("BET", "RAISE"):
                     fold_eq_pct_r = fold_equity_default
                     p_fold = fold_eq_pct_r / 100.0
-                    showdown_ev = ev
-                    ev = p_fold * pot_before + (1.0 - p_fold) * showdown_ev
+                    range_ev = p_fold * pot_before + (1.0 - p_fold) * range_ev
 
                 rows.append(
                     {
                         "action_id": action_id,
                         "hero_id": hero_id,
-                        "equity": equity,
-                        "ev": ev,
+                        "equity": range_equity,
+                        "ev": range_ev,
                         "ev_type": range_ev_type,
                         "blended_vpip": blended_v,
                         "blended_pfr": blended_p,

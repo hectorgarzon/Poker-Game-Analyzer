@@ -149,21 +149,22 @@ Pre-computed EV results per hero action, persisted to avoid recomputation. Writt
 
 | Column | Type | Description |
 | :--- | :--- | :--- |
-| `action_id` | INTEGER FK (PK) | Link to `Actions`. Composite PK with `hero_id`. |
-| `hero_id` | INTEGER FK (PK) | Link to `Players` (the hero). |
-| `equity` | REAL NOT NULL | Hero's win equity (0.0–1.0). Exact when villain cards known; estimated from range otherwise. |
+| `action_id` | INTEGER FK (PK) | Link to `Actions`. Composite PK with `hero_id` and `ev_type`. |
+| `hero_id` | INTEGER FK (PK) | Link to `Players` (the hero). Composite PK with `action_id` and `ev_type`. |
+| `equity` | REAL NOT NULL | Hero's win equity (0.0–1.0). Exact against known cards (`allin_exact`); estimated from range (`range`). |
 | `ev` | REAL NOT NULL | Expected value: `equity × pot_to_win − (1 − equity) × wager`. |
-| `ev_type` | TEXT NOT NULL | `'exact'` — villain's cards were known (showdown/all-in). `'range'` — equity estimated from villain's inferred range. |
-| `blended_vpip` | REAL | Bayesian-blended VPIP used in range construction. NULL when `ev_type = 'exact'`. |
-| `blended_pfr` | REAL | Bayesian-blended PFR used in range construction. NULL when `ev_type = 'exact'`. |
-| `blended_3bet` | REAL | Bayesian-blended 3-Bet % used in range construction. NULL when `ev_type = 'exact'`. |
-| `villain_preflop_action` | TEXT | `'call'`, `'2bet'`, `'3bet'`, or `'4bet+'`. NULL when `ev_type = 'exact'`. |
-| `contracted_range_size` | INTEGER | Number of combos surviving contraction. NULL when `ev_type = 'exact'`. |
+| `ev_type` | TEXT NOT NULL (PK) | `'range'` — equity estimated from villain's inferred range (action table). `'range_multiway_approx'` — range-based, multiway hand. `'allin_exact'` — hero was all-in and villain's cards were known (variance summary). `'allin_exact_multiway'` — all-in, multiway known cards. CHECK constraint enforces this set (plus legacy `'exact'`, `'exact_multiway'`). |
+| `blended_vpip` | REAL | Bayesian-blended VPIP used in range construction. NULL for `allin_exact` types. |
+| `blended_pfr` | REAL | Bayesian-blended PFR used in range construction. NULL for `allin_exact` types. |
+| `blended_3bet` | REAL | Bayesian-blended 3-Bet % used in range construction. NULL for `allin_exact` types. |
+| `villain_preflop_action` | TEXT | `'call'`, `'2bet'`, `'3bet'`, or `'4bet+'`. NULL for `allin_exact` types. |
+| `contracted_range_size` | INTEGER | Number of combos surviving contraction. NULL for `allin_exact` types. |
+| `fold_equity_pct` | REAL | Fold equity % applied to BET/RAISE actions for **range-based EV only** (`range`, `range_multiway_approx`). NULL for CALL/FOLD actions and always NULL for `allin_exact`/`allin_exact_multiway` (villain cards are known = they called, so fold probability is 0). |
 | `sample_count` | INTEGER NOT NULL | Monte Carlo samples used. |
 | `computed_at` | TEXT NOT NULL | ISO 8601 timestamp of computation. |
 
 **Key functions** (`src/pokerhero/database/db.py`):
-* `get_action_ev(conn, action_id, hero_id) -> dict | None` — returns the cached row for an action, or `None`.
+* `get_action_ev(conn, action_id, hero_id, ev_type=None) -> dict | None` — returns the cached row for an action (filtered by ev_type if provided). When `ev_type=None`, prefers the range track (`range` → `range_multiway_approx` → others) via ORDER BY, or `None` on miss.
 * `save_action_evs(conn, rows) -> None` — bulk `INSERT OR REPLACE` for a list of row dicts.
 * `get_range_settings(conn) -> dict` — returns all `range_*` settings as a typed dict (falls back to `RANGE_SETTING_DEFAULTS`).
 

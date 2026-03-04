@@ -266,8 +266,82 @@ class TestConnection:
         )
         conn.close()
 
+    def test_init_db_raises_on_old_action_ev_cache_schema(self, tmp_path):
+        """init_db must raise a clear RuntimeError when action_ev_cache exists with
+        the old PK (action_id, hero_id) — missing ev_type in the primary key.
 
-class TestPlayerInsert:
+        On old databases, INSERT OR REPLACE would silently overwrite one EV track
+        with the other.  A hard error forces the user to reset the DB before
+        corrupt EV data accumulates.
+        """
+        import sqlite3
+
+        from pokerhero.database.db import init_db
+
+        db_path = tmp_path / "old_schema.db"
+        # Create a DB with the old action_ev_cache schema (PK without ev_type)
+        conn = sqlite3.connect(str(db_path))
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS players (
+                id INTEGER PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                preferred_name TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS sessions (
+                id INTEGER PRIMARY KEY,
+                game_type TEXT, limit_type TEXT, max_seats INTEGER,
+                small_blind REAL, big_blind REAL, ante REAL, start_time TEXT,
+                is_favorite INTEGER NOT NULL DEFAULT 0,
+                currency TEXT NOT NULL DEFAULT 'PLAY'
+            );
+            CREATE TABLE IF NOT EXISTS hands (
+                id INTEGER PRIMARY KEY,
+                source_hand_id TEXT, session_id INTEGER, total_pot REAL,
+                uncalled_bet_returned REAL, rake REAL, timestamp TEXT,
+                board_flop TEXT, board_turn TEXT, board_river TEXT,
+                is_favorite INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS hand_players (
+                id INTEGER PRIMARY KEY,
+                hand_id INTEGER, player_id INTEGER, position TEXT,
+                starting_stack REAL, hole_cards TEXT, vpip INTEGER,
+                pfr INTEGER, three_bet INTEGER NOT NULL DEFAULT 0,
+                went_to_showdown INTEGER, net_result REAL
+            );
+            CREATE TABLE IF NOT EXISTS actions (
+                id INTEGER PRIMARY KEY,
+                hand_id INTEGER, player_id INTEGER, is_hero INTEGER,
+                street TEXT, action_type TEXT, amount REAL,
+                amount_to_call REAL, pot_before REAL, is_all_in INTEGER,
+                sequence INTEGER, spr REAL, mdf REAL
+            );
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY, value TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS action_ev_cache (
+                action_id  INTEGER NOT NULL,
+                hero_id    INTEGER NOT NULL,
+                equity     REAL    NOT NULL,
+                ev         REAL    NOT NULL,
+                ev_type    TEXT    NOT NULL,
+                blended_vpip REAL,
+                blended_pfr REAL,
+                blended_3bet REAL,
+                villain_preflop_action TEXT,
+                contracted_range_size INTEGER,
+                fold_equity_pct REAL,
+                sample_count INTEGER NOT NULL,
+                computed_at TEXT NOT NULL,
+                PRIMARY KEY (action_id, hero_id)
+            );
+            """
+        )
+        conn.close()
+
+        with pytest.raises(RuntimeError, match="action_ev_cache"):
+            init_db(db_path)
+
     @pytest.fixture
     def idb(self, tmp_path):
         from pokerhero.database.db import init_db
@@ -1325,3 +1399,79 @@ class TestActionEvCache:
         clear_all_data(db)
         count = db.execute("SELECT COUNT(*) FROM action_ev_cache").fetchone()[0]
         assert count == 0
+
+    def _base_row(self, aid, hero_id, ev_type="range"):
+        return {
+            "action_id": aid,
+            "hero_id": hero_id,
+            "equity": 0.55,
+            "ev": 5.0,
+            "ev_type": ev_type,
+            "blended_vpip": None,
+            "blended_pfr": None,
+            "blended_3bet": None,
+            "villain_preflop_action": None,
+            "contracted_range_size": None,
+            "fold_equity_pct": None,
+            "sample_count": 100,
+            "computed_at": "2024-01-01T00:00:00",
+        }
+
+    def test_allin_exact_ev_type_accepted(self, db, action_id):
+        """ev_type='allin_exact' is accepted by the CHECK constraint."""
+        from pokerhero.database.db import save_action_evs
+
+        aid, hero_id = action_id
+        # Should not raise (previously failed before 'allin_exact' was added to CHECK)
+        save_action_evs(db, [self._base_row(aid, hero_id, ev_type="allin_exact")])
+        db.commit()
+        count = db.execute(
+            "SELECT COUNT(*) FROM action_ev_cache WHERE ev_type = 'allin_exact'"
+        ).fetchone()[0]
+        assert count == 1
+
+    def test_allin_exact_multiway_ev_type_accepted(self, db, action_id):
+        """ev_type='allin_exact_multiway' is accepted by the CHECK constraint."""
+        from pokerhero.database.db import save_action_evs
+
+        aid, hero_id = action_id
+        save_action_evs(
+            db, [self._base_row(aid, hero_id, ev_type="allin_exact_multiway")]
+        )
+        db.commit()
+        count = db.execute(
+            "SELECT COUNT(*) FROM action_ev_cache"
+            " WHERE ev_type = 'allin_exact_multiway'"
+        ).fetchone()[0]
+        assert count == 1
+
+    def test_dual_rows_per_action_allowed(self, db, action_id):
+        """Same action can have both 'range' and 'allin_exact' rows."""
+        from pokerhero.database.db import save_action_evs
+
+        aid, hero_id = action_id
+        save_action_evs(db, [self._base_row(aid, hero_id, ev_type="range")])
+        # Should not raise; current schema allows multiple EV rows per action.
+        save_action_evs(db, [self._base_row(aid, hero_id, ev_type="allin_exact")])
+        db.commit()
+        count = db.execute(
+            "SELECT COUNT(*) FROM action_ev_cache WHERE action_id = ?", (aid,)
+        ).fetchone()[0]
+        assert count == 2
+
+    def test_get_action_ev_no_ev_type_prefers_range(self, db, action_id):
+        """When ev_type=None, get_action_ev returns the range row preferentially.
+
+        With the 3-column PK a single (action_id, hero_id) can have both a
+        'range' row and an 'allin_exact' row.  Calling without ev_type must
+        always return the range track, not an arbitrary row.
+        """
+        from pokerhero.database.db import get_action_ev, save_action_evs
+
+        aid, hero_id = action_id
+        save_action_evs(db, [self._base_row(aid, hero_id, ev_type="allin_exact")])
+        save_action_evs(db, [self._base_row(aid, hero_id, ev_type="range")])
+        db.commit()
+        row = get_action_ev(db, aid, hero_id)
+        assert row is not None
+        assert row["ev_type"] == "range"

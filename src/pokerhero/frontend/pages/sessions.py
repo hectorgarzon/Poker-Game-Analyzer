@@ -418,6 +418,7 @@ layout = html.Div(
         dcc.Store(id="pending-session-report"),
         dcc.Store(id="ev-result-store", data=None),
         dcc.Store(id="consumed-search", data=""),
+        dcc.Store(id="hand-filter-state"),
     ],
 )
 
@@ -775,6 +776,8 @@ def _build_ev_cell(
 ) -> str | html.Div:
     """Build the EV display cell for an action table row.
 
+    Always shows range-based equity (decision-review track).
+
     Args:
         cache_row: Dict from ``action_ev_cache`` (all columns), or ``None``
             when no cached EV exists for this action.
@@ -783,7 +786,7 @@ def _build_ev_cell(
 
     Returns:
         ``'—'`` when *cache_row* is ``None``.
-        An ``html.Div`` for exact or range EV rows.
+        An ``html.Div`` with range-equity display.
     """
     if cache_row is None:
         return "—"
@@ -803,21 +806,7 @@ def _build_ev_cell(
             color = "var(--pnl-positive, green)"
         return html.Div(html.Span(label, style={"color": color, "fontSize": "12px"}))
 
-    if ev_type in ("exact", "exact_multiway"):
-        equity_pct = f"{equity * 100:.0f}%"
-        prefix = "Multiway " if ev_type == "exact_multiway" else ""
-        summary = f"{prefix}Equity: {equity_pct}   EV: {ev_str}"
-        children: list[Any] = [html.Span(summary)]
-        if action_type == "CALL" and ev < 0:
-            children.append(
-                html.Div(
-                    "[Fold was better ↑]",
-                    style={"color": "var(--pnl-negative, red)", "fontSize": "11px"},
-                )
-            )
-        return html.Div(children)
-
-    # ev_type == "range" or "range_multiway_approx"
+    # Range EV (decision-review track)
     equity_pct = f"~{equity * 100:.0f}%"
     multiway_note = " (multiway approx)" if ev_type == "range_multiway_approx" else ""
     summary = f"Est. Equity: {equity_pct}   Est. EV: {ev_str}{multiway_note}"
@@ -834,21 +823,27 @@ def _build_ev_cell(
         "Note: bluffs not explicitly modelled.",
     ]
     tooltip = "  |  ".join(tooltip_parts)
-    return html.Div(
-        [
-            html.Span(summary),
-            html.Span(
-                " ℹ",
-                title=tooltip,
-                style={
-                    "cursor": "help",
-                    "color": "var(--text-3, #888)",
-                    "fontSize": "11px",
-                    "marginLeft": "4px",
-                },
-            ),
-        ]
-    )
+    children: list[Any] = [
+        html.Span(summary),
+        html.Span(
+            " ℹ",
+            title=tooltip,
+            style={
+                "cursor": "help",
+                "color": "var(--text-3, #888)",
+                "fontSize": "11px",
+                "marginLeft": "4px",
+            },
+        ),
+    ]
+    if action_type == "CALL" and ev < 0:
+        children.append(
+            html.Div(
+                "[Fold was better ↑]",
+                style={"color": "var(--pnl-negative, red)", "fontSize": "11px"},
+            )
+        )
+    return html.Div(children)
 
 
 def _breadcrumb(
@@ -1115,6 +1110,7 @@ def _parse_nav_search(search: str) -> _DrillDownState | None:
     Input("ev-result-store", "data"),
     Input("_pages_location", "search"),
     State("consumed-search", "data"),
+    State("hand-filter-state", "data"),
     prevent_initial_call=False,
 )
 def _render(
@@ -1123,6 +1119,7 @@ def _render(
     _ev_result: dict[str, Any] | None,
     search: str,
     consumed_search: str,
+    hand_filter_state: dict[str, Any] | None,
 ) -> tuple[html.Div | str, html.Div, html.Div | None, int | None, str]:
     if pathname != "/sessions":
         raise dash.exceptions.PreventUpdate
@@ -1205,7 +1202,9 @@ def _render(
         )
 
     if level == "hands":
-        content, label = _render_hands(db_path, session_id)
+        content, label = _render_hands(
+            db_path, session_id, filter_state=hand_filter_state
+        )
         return (
             content,
             _breadcrumb("hands", session_label=label, session_id=session_id),
@@ -1331,17 +1330,22 @@ def _filter_hands_data(
     saw_flop_only: bool,
     showdown_only: bool,
     favorites_only: bool = False,
+    ev_filter: list[str] | None = None,
 ) -> pd.DataFrame:
     """Filter a hands DataFrame based on user-selected criteria.
 
     Args:
         df: DataFrame from get_hands (columns: net_result, position,
-            saw_flop, went_to_showdown).
+            saw_flop, went_to_showdown, has_bad_call, has_good_call,
+            has_bad_fold).
         pnl_min: Minimum net_result (inclusive); None keeps all.
         pnl_max: Maximum net_result (inclusive); None keeps all.
         positions: List of position strings to keep; None keeps all.
         saw_flop_only: When True, keep only hands where hero saw the flop.
         showdown_only: When True, keep only hands that went to showdown.
+        ev_filter: List of EV quality flags to keep (OR logic). Supported
+            values: ``'bad_call'``, ``'good_call'``, ``'bad_fold'``.
+            None or empty list disables the filter.
 
     Returns:
         Filtered copy of df.
@@ -1359,6 +1363,21 @@ def _filter_hands_data(
         result = result[result["went_to_showdown"].astype(int) == 1]
     if favorites_only and "is_favorite" in result.columns:
         result = result[result["is_favorite"].astype(int) == 1]
+    if ev_filter:
+        _FLAG_COL = {
+            "bad_call": "has_bad_call",
+            "good_call": "has_good_call",
+            "bad_fold": "has_bad_fold",
+        }
+        mask = pd.Series(False, index=result.index)
+        applied_any = False
+        for key in ev_filter:
+            col = _FLAG_COL.get(key)
+            if col and col in result.columns:
+                applied_any = True
+                mask = mask | (result[col].astype(int) == 1)
+        if applied_any:
+            result = result[mask]
     return result
 
 
@@ -1916,25 +1935,38 @@ def _build_session_narrative(
 def _build_ev_summary(
     ev_df: pd.DataFrame,
     *,
+    ev_calculated: bool = False,
     lucky_threshold: float = 0.4,
     unlucky_threshold: float = 0.6,
 ) -> html.Div:
-    """Return an EV luck indicator based on cached exact-EV showdown/all-in rows.
+    """Return an EV luck indicator based on cached all-in exact EV rows.
 
     Classifies the session as above/below/near equity using pre-computed
-    equity values read from ``action_ev_cache`` via ``get_session_showdown_evs``.
+    equity values read from ``action_ev_cache`` via ``get_session_allin_evs``.
 
     Args:
-        ev_df: DataFrame from get_session_showdown_evs (columns: hand_id,
-               source_hand_id, equity, net_result).  Empty means EVs have not
-               been calculated yet.
+        ev_df: DataFrame from get_session_allin_evs (columns: hand_id,
+               source_hand_id, equity, net_result).  Empty means either no
+               all-in EV has been calculated yet, or EVs were calculated but
+               this session had no qualifying all-in spots with revealed cards.
+        ev_calculated: True when EVs have been calculated for this session
+               (action_ev_cache rows exist).  Used to distinguish "not yet
+               run" from "no all-in spots found".
         lucky_threshold: Hero wins with equity below this fraction → Lucky.
         unlucky_threshold: Hero loses with equity above this fraction → Unlucky.
 
     Returns:
-        html.Div with a luck verdict and showdown hand count.
+        html.Div with a luck verdict and all-in hand count.
     """
     if ev_df.empty:
+        if ev_calculated:
+            return html.Div(
+                html.P(
+                    "No all-in spots with revealed cards found in this session.",
+                    style={"fontSize": "13px", "color": "var(--text-4, #888)"},
+                ),
+                style={"marginBottom": "20px"},
+            )
         return html.Div(
             [
                 html.P(
@@ -1984,7 +2016,7 @@ def _build_ev_summary(
                 style={"marginBottom": "6px", "color": "var(--text-2, #333)"},
             ),
             html.P(
-                f"{n} showdown {hand_word} with cached exact EV.",
+                f"{n} all-in {hand_word} with exact EV.",
                 style={
                     "fontSize": "13px",
                     "color": "var(--text-3, #555)",
@@ -2018,7 +2050,7 @@ def _build_flagged_hands_list(
     is a clickable link that navigates directly to the hand action view.
 
     Args:
-        ev_df: DataFrame from get_session_showdown_evs (columns: hand_id,
+        ev_df: DataFrame from get_session_allin_evs (columns: hand_id,
                source_hand_id, equity, net_result).
         session_id: Internal session id used to build the deep-link URL.
         lucky_threshold: Hero wins with equity below this fraction → Lucky.
@@ -2029,7 +2061,7 @@ def _build_flagged_hands_list(
     """
     if ev_df.empty:
         return html.Div(
-            "No showdown data available for analysis.",
+            "No all-in EV data available for analysis.",
             style={"color": "var(--text-4, #888)", "fontSize": "13px"},
         )
 
@@ -2117,16 +2149,18 @@ def _render_session_report(db_path: str, session_id: int) -> tuple[html.Div | st
         )
 
     from pokerhero.analysis.queries import (
+        get_session_allin_evs,
+        get_session_ev_status,
         get_session_hero_actions,
         get_session_kpis,
-        get_session_showdown_evs,
     )
 
     conn = get_connection(db_path)
     try:
         kpis_df = get_session_kpis(conn, session_id, player_id)
         actions_df = get_session_hero_actions(conn, session_id, player_id)
-        ev_df = get_session_showdown_evs(conn, session_id, int(player_id))
+        ev_df = get_session_allin_evs(conn, session_id, int(player_id))
+        ev_count, _ = get_session_ev_status(conn, session_id)
         pos_table = _build_session_position_table(kpis_df, conn)
         s = _read_analysis_settings(db_path)
     finally:
@@ -2145,6 +2179,7 @@ def _render_session_report(db_path: str, session_id: int) -> tuple[html.Div | st
             pos_table,
             _build_ev_summary(
                 ev_df,
+                ev_calculated=ev_count > 0,
                 lucky_threshold=lucky_threshold,
                 unlucky_threshold=unlucky_threshold,
             ),
@@ -2176,7 +2211,11 @@ def _render_session_report(db_path: str, session_id: int) -> tuple[html.Div | st
     return content, session_label
 
 
-def _render_hands(db_path: str, session_id: int) -> tuple[html.Div | str, str]:
+def _render_hands(
+    db_path: str,
+    session_id: int,
+    filter_state: dict[str, Any] | None = None,
+) -> tuple[html.Div | str, str]:
     player_id = _get_hero_player_id(db_path)
     if player_id is None:
         return "", ""
@@ -2202,6 +2241,7 @@ def _render_hands(db_path: str, session_id: int) -> tuple[html.Div | str, str]:
         return html.Div("No hands found for this session."), session_label
 
     positions = sorted(df["position"].dropna().unique().tolist())
+    fs: dict[str, Any] = filter_state or {}
     _input_style = {
         "border": "1px solid var(--border, #ddd)",
         "borderRadius": "4px",
@@ -2216,6 +2256,7 @@ def _render_hands(db_path: str, session_id: int) -> tuple[html.Div | str, str]:
                 type="number",
                 placeholder="P&L min",
                 debounce=True,
+                value=fs.get("pnl_min"),
                 style={**_input_style, "width": "90px"},
             ),
             dcc.Input(
@@ -2223,6 +2264,7 @@ def _render_hands(db_path: str, session_id: int) -> tuple[html.Div | str, str]:
                 type="number",
                 placeholder="P&L max",
                 debounce=True,
+                value=fs.get("pnl_max"),
                 style={**_input_style, "width": "90px"},
             ),
             dcc.Dropdown(
@@ -2230,6 +2272,7 @@ def _render_hands(db_path: str, session_id: int) -> tuple[html.Div | str, str]:
                 options=[{"label": p, "value": p} for p in positions],
                 multi=True,
                 placeholder="Position…",
+                value=fs.get("positions"),
                 style={**_input_style, "minWidth": "130px", "height": "auto"},
                 clearable=True,
             ),
@@ -2239,7 +2282,7 @@ def _render_hands(db_path: str, session_id: int) -> tuple[html.Div | str, str]:
                     {"label": " Saw flop", "value": "saw_flop"},
                     {"label": " Showdown", "value": "showdown"},
                 ],
-                value=[],
+                value=fs.get("flags") or [],
                 inline=True,
                 inputStyle={"marginRight": "4px"},
                 labelStyle={"marginRight": "12px", "fontSize": "13px"},
@@ -2247,10 +2290,23 @@ def _render_hands(db_path: str, session_id: int) -> tuple[html.Div | str, str]:
             dcc.Checklist(
                 id="hand-filter-favorites",
                 options=[{"label": " ★ Favourites only", "value": "favorites"}],
-                value=[],
+                value=fs.get("favorites") or [],
                 inline=True,
                 inputStyle={"marginRight": "4px"},
                 labelStyle={"fontSize": "13px"},
+            ),
+            dcc.Dropdown(
+                id="hand-filter-ev",
+                options=[
+                    {"label": "⚠ Bad call (−EV)", "value": "bad_call"},
+                    {"label": "✓ Good call (+EV)", "value": "good_call"},
+                    {"label": "⚠ Bad fold (should call)", "value": "bad_fold"},
+                ],
+                multi=True,
+                placeholder="EV quality…",
+                value=fs.get("ev_filter"),
+                style={**_input_style, "minWidth": "175px", "height": "auto"},
+                clearable=True,
             ),
         ],
         style={
@@ -2435,6 +2491,7 @@ def _render_actions(db_path: str, hand_id: int) -> tuple[html.Div | str, str]:
                 FROM action_ev_cache aec
                 JOIN actions a ON aec.action_id = a.id
                 WHERE a.hand_id = ? AND aec.hero_id = ?
+                  AND aec.ev_type IN ('range', 'range_multiway_approx')
                 """,
                 (hand_id, hero_id),
             ).fetchall():
@@ -2821,6 +2878,7 @@ def _apply_session_filters(
     Input("hand-filter-position", "value"),
     Input("hand-filter-flags", "value"),
     Input("hand-filter-favorites", "value"),
+    Input("hand-filter-ev", "value"),
     State("hand-data-store", "data"),
     prevent_initial_call=True,
 )
@@ -2830,6 +2888,7 @@ def _apply_hand_filters(
     positions: list[str] | None,
     flags: list[str] | None,
     fav_filter: list[str] | None,
+    ev_filter: list[str] | None,
     data: list[dict[str, Any]] | None,
 ) -> list[dict[str, Any]]:
     if not data:
@@ -2844,8 +2903,38 @@ def _apply_hand_filters(
         "saw_flop" in flags,
         "showdown" in flags,
         favorites_only="favorites" in (fav_filter or []),
+        ev_filter=ev_filter or None,
     )
     return list(_build_hand_table(filtered).data)
+
+
+@callback(
+    Output("hand-filter-state", "data"),
+    Input("hand-filter-pnl-min", "value"),
+    Input("hand-filter-pnl-max", "value"),
+    Input("hand-filter-position", "value"),
+    Input("hand-filter-flags", "value"),
+    Input("hand-filter-favorites", "value"),
+    Input("hand-filter-ev", "value"),
+    prevent_initial_call=True,
+)
+def _save_hand_filter_state(
+    pnl_min: float | None,
+    pnl_max: float | None,
+    positions: list[str] | None,
+    flags: list[str] | None,
+    favorites: list[str] | None,
+    ev_filter: list[str] | None,
+) -> dict[str, Any]:
+    """Persist hand filter values so they are restored when navigating back."""
+    return {
+        "pnl_min": pnl_min,
+        "pnl_max": pnl_max,
+        "positions": positions,
+        "flags": flags,
+        "favorites": favorites,
+        "ev_filter": ev_filter,
+    }
 
 
 @callback(
