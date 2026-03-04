@@ -610,6 +610,26 @@ class TestHandFilters:
         )
         assert len(result) == 4
 
+    def test_ev_filter_unknown_key_returns_all(self):
+        """Unrecognized EV filter keys must not filter out all rows.
+
+        If ev_filter contains only keys not in the known flag mapping,
+        the function must return the DataFrame unchanged rather than
+        returning an empty result.
+        """
+        from pokerhero.frontend.pages.sessions import _filter_hands_data
+
+        result = _filter_hands_data(
+            self._make_ev_df(),
+            None,
+            None,
+            None,
+            False,
+            False,
+            ev_filter=["not_a_real_key"],
+        )
+        assert len(result) == 4, "Unknown EV filter key must not silently drop all rows"
+
 
 class TestRenderHandsFilterState:
     """Tests for filter state persistence across drill-down navigation."""
@@ -3014,6 +3034,80 @@ class TestCalculateSessionEvs:
         # allin_exact must be written even though range track was skipped
         assert "allin_exact" in ev_types, (
             f"Expected allin_exact row (villain vpip=0), got: {ev_types}"
+        )
+
+    def test_allin_exact_fold_equity_not_applied(self, db_file):
+        """allin_exact rows must never have fold_equity_pct applied.
+
+        When villain cards are known (they called the all-in), the fold
+        probability is 0 by definition.  Applying fold_equity would
+        systematically distort the variance EV.
+        """
+        conn, db_path = db_file
+        from pokerhero.analysis.stats import calculate_session_evs
+
+        hero_id = conn.execute(
+            "INSERT INTO players (username, preferred_name)"
+            " VALUES ('hero_fe', 'HeroFE')"
+        ).lastrowid
+        villain_id = conn.execute(
+            "INSERT INTO players (username, preferred_name) VALUES ('vil_fe', 'VilFE')"
+        ).lastrowid
+        sid = conn.execute(
+            "INSERT INTO sessions"
+            " (game_type, limit_type, max_seats,"
+            "  small_blind, big_blind, ante, start_time)"
+            " VALUES ('NLHE', 'No Limit', 6, 50, 100, 0, '2024-08-01')"
+        ).lastrowid
+        hid = conn.execute(
+            "INSERT INTO hands"
+            " (source_hand_id, session_id, total_pot, uncalled_bet_returned,"
+            "  rake, timestamp, board_flop, board_turn, board_river)"
+            " VALUES ('FE1', ?, 2000, 0, 0, '2024-08-01T00:00:00',"
+            " 'As Kd 2c', NULL, NULL)",
+            (sid,),
+        ).lastrowid
+        conn.execute(
+            "INSERT INTO hand_players"
+            " (hand_id, player_id, position, starting_stack, hole_cards,"
+            "  vpip, pfr, three_bet, went_to_showdown, net_result)"
+            " VALUES (?, ?, 'BTN', 5000, 'Ac Kh', 1, 1, 0, 1, -1000)",
+            (hid, hero_id),
+        )
+        conn.execute(
+            "INSERT INTO hand_players"
+            " (hand_id, player_id, position, starting_stack, hole_cards,"
+            "  vpip, pfr, three_bet, went_to_showdown, net_result)"
+            " VALUES (?, ?, 'BB', 5000, '2d 3d', 1, 1, 0, 1, 1000)",
+            (hid, villain_id),
+        )
+        conn.execute(
+            "INSERT INTO actions"
+            " (hand_id, player_id, is_hero, street, action_type,"
+            "  amount, amount_to_call, pot_before, is_all_in, sequence)"
+            " VALUES (?, ?, 0, 'PREFLOP', 'RAISE', 300, 0, 150, 0, 1)",
+            (hid, villain_id),
+        )
+        # Hero bets all-in on the flop — action_type='BET' so fold equity
+        # would normally be computed for the range track.
+        allin_action_id = conn.execute(
+            "INSERT INTO actions"
+            " (hand_id, player_id, is_hero, street, action_type,"
+            "  amount, amount_to_call, pot_before, is_all_in, sequence)"
+            " VALUES (?, ?, 1, 'FLOP', 'BET', 1000, 0, 800, 1, 2)",
+            (hid, hero_id),
+        ).lastrowid
+        conn.commit()
+
+        calculate_session_evs(db_path, sid, hero_id, self._FAST_SETTINGS)
+        row = conn.execute(
+            "SELECT fold_equity_pct FROM action_ev_cache"
+            " WHERE action_id = ? AND hero_id = ? AND ev_type = 'allin_exact'",
+            (allin_action_id, hero_id),
+        ).fetchone()
+        assert row is not None, "allin_exact row must exist"
+        assert row[0] is None, (
+            f"fold_equity_pct must be NULL for allin_exact rows, got {row[0]}"
         )
 
 
