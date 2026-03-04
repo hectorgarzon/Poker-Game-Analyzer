@@ -3218,6 +3218,119 @@ class TestCalculateSessionEvs:
             f"got {ev:.1f} (understated would be {expected_ev_understated:.1f})"
         )
 
+    def test_allin_exact_written_when_primary_villain_has_no_cards(self, db_file):
+        """allin_exact must be written when a *secondary* villain has revealed cards
+        but the primary villain (chosen for range EV) does not.
+
+        The gate `known_villain_cards.get(villain_id)` was skipping allin_exact
+        entirely when the primary villain folded/didn't show, even if another
+        active villain's cards were known.  allin_exact should be derived solely
+        from `known_villain_cards`, regardless of which player is the primary villain.
+        """
+        conn, db_path = db_file
+        from pokerhero.analysis.stats import calculate_session_evs
+
+        hero_id = conn.execute(
+            "INSERT INTO players (username, preferred_name)"
+            " VALUES ('hero_sec', 'HeroSec')"
+        ).lastrowid
+        # Two villains: v1 is the primary villain (more hands observed, no cards),
+        # v2 is a secondary villain whose cards ARE known.
+        v1_id = conn.execute(
+            "INSERT INTO players (username, preferred_name) VALUES ('v1_sec', 'V1Sec')"
+        ).lastrowid
+        v2_id = conn.execute(
+            "INSERT INTO players (username, preferred_name) VALUES ('v2_sec', 'V2Sec')"
+        ).lastrowid
+        sid = conn.execute(
+            "INSERT INTO sessions"
+            " (game_type, limit_type, max_seats,"
+            "  small_blind, big_blind, ante, start_time)"
+            " VALUES ('NLHE', 'No Limit', 6, 50, 100, 0, '2024-10-01')"
+        ).lastrowid
+        # Give v1 an extra hand in the session so it has more observations →
+        # identify_primary_villain picks v1 (not v2) as the primary villain.
+        extra_hid = conn.execute(
+            "INSERT INTO hands"
+            " (source_hand_id, session_id, total_pot, uncalled_bet_returned,"
+            "  rake, timestamp)"
+            " VALUES ('SEC0', ?, 200, 0, 0, '2024-09-30T23:00:00')",
+            (sid,),
+        ).lastrowid
+        conn.execute(
+            "INSERT INTO hand_players"
+            " (hand_id, player_id, position, starting_stack, hole_cards,"
+            "  vpip, pfr, three_bet, went_to_showdown, net_result)"
+            " VALUES (?, ?, 'BB', 1000, NULL, 1, 0, 0, 0, -100)",
+            (extra_hid, v1_id),
+        )
+        hid = conn.execute(
+            "INSERT INTO hands"
+            " (source_hand_id, session_id, total_pot, uncalled_bet_returned,"
+            "  rake, timestamp, board_flop, board_turn, board_river)"
+            " VALUES ('SEC1', ?, 3000, 0, 0, '2024-10-01T00:00:00',"
+            " 'As 2d 3h', NULL, NULL)",
+            (sid,),
+        ).lastrowid
+        conn.execute(
+            "INSERT INTO hand_players"
+            " (hand_id, player_id, position, starting_stack, hole_cards,"
+            "  vpip, pfr, three_bet, went_to_showdown, net_result)"
+            " VALUES (?, ?, 'BTN', 5000, 'Ac Kd', 1, 1, 0, 1, 2000)",
+            (hid, hero_id),
+        )
+        # v1: primary villain (2 observed hands) — no revealed hole cards this hand
+        conn.execute(
+            "INSERT INTO hand_players"
+            " (hand_id, player_id, position, starting_stack, hole_cards,"
+            "  vpip, pfr, three_bet, went_to_showdown, net_result)"
+            " VALUES (?, ?, 'CO', 5000, NULL, 1, 1, 0, 0, -1000)",
+            (hid, v1_id),
+        )
+        # v2: secondary villain (1 observed hand) — has revealed hole cards
+        conn.execute(
+            "INSERT INTO hand_players"
+            " (hand_id, player_id, position, starting_stack, hole_cards,"
+            "  vpip, pfr, three_bet, went_to_showdown, net_result)"
+            " VALUES (?, ?, 'BB', 5000, '2c 3d', 1, 0, 0, 1, -1000)",
+            (hid, v2_id),
+        )
+        # v1 raised preflop
+        conn.execute(
+            "INSERT INTO actions"
+            " (hand_id, player_id, is_hero, street, action_type,"
+            "  amount, amount_to_call, pot_before, is_all_in, sequence)"
+            " VALUES (?, ?, 0, 'PREFLOP', 'RAISE', 300, 0, 150, 0, 1)",
+            (hid, v1_id),
+        )
+        conn.execute(
+            "INSERT INTO actions"
+            " (hand_id, player_id, is_hero, street, action_type,"
+            "  amount, amount_to_call, pot_before, is_all_in, sequence)"
+            " VALUES (?, ?, 0, 'PREFLOP', 'CALL', 300, 300, 450, 0, 2)",
+            (hid, v2_id),
+        )
+        # Hero goes all-in on the flop; v2 calls (their cards are revealed)
+        allin_action_id = conn.execute(
+            "INSERT INTO actions"
+            " (hand_id, player_id, is_hero, street, action_type,"
+            "  amount, amount_to_call, pot_before, is_all_in, sequence)"
+            " VALUES (?, ?, 1, 'FLOP', 'BET', 1000, 0, 900, 1, 3)",
+            (hid, hero_id),
+        ).lastrowid
+        conn.commit()
+
+        calculate_session_evs(db_path, sid, hero_id, self._FAST_SETTINGS)
+        row = conn.execute(
+            "SELECT ev_type FROM action_ev_cache WHERE action_id = ? AND hero_id = ?",
+            (allin_action_id, hero_id),
+        ).fetchall()
+        ev_types = {r[0] for r in row}
+        assert "allin_exact" in ev_types, (
+            "allin_exact must be written when secondary villain has cards,"
+            f" got: {ev_types}"
+        )
+
 
 class TestGetSessionEvStatus:
     """Tests for get_session_ev_status query function."""
