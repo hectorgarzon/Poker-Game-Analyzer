@@ -266,8 +266,82 @@ class TestConnection:
         )
         conn.close()
 
+    def test_init_db_raises_on_old_action_ev_cache_schema(self, tmp_path):
+        """init_db must raise a clear RuntimeError when action_ev_cache exists with
+        the old PK (action_id, hero_id) — missing ev_type in the primary key.
 
-class TestPlayerInsert:
+        On old databases, INSERT OR REPLACE would silently overwrite one EV track
+        with the other.  A hard error forces the user to reset the DB before
+        corrupt EV data accumulates.
+        """
+        import sqlite3
+
+        from pokerhero.database.db import init_db
+
+        db_path = tmp_path / "old_schema.db"
+        # Create a DB with the old action_ev_cache schema (PK without ev_type)
+        conn = sqlite3.connect(str(db_path))
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS players (
+                id INTEGER PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                preferred_name TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS sessions (
+                id INTEGER PRIMARY KEY,
+                game_type TEXT, limit_type TEXT, max_seats INTEGER,
+                small_blind REAL, big_blind REAL, ante REAL, start_time TEXT,
+                is_favorite INTEGER NOT NULL DEFAULT 0,
+                currency TEXT NOT NULL DEFAULT 'PLAY'
+            );
+            CREATE TABLE IF NOT EXISTS hands (
+                id INTEGER PRIMARY KEY,
+                source_hand_id TEXT, session_id INTEGER, total_pot REAL,
+                uncalled_bet_returned REAL, rake REAL, timestamp TEXT,
+                board_flop TEXT, board_turn TEXT, board_river TEXT,
+                is_favorite INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS hand_players (
+                id INTEGER PRIMARY KEY,
+                hand_id INTEGER, player_id INTEGER, position TEXT,
+                starting_stack REAL, hole_cards TEXT, vpip INTEGER,
+                pfr INTEGER, three_bet INTEGER NOT NULL DEFAULT 0,
+                went_to_showdown INTEGER, net_result REAL
+            );
+            CREATE TABLE IF NOT EXISTS actions (
+                id INTEGER PRIMARY KEY,
+                hand_id INTEGER, player_id INTEGER, is_hero INTEGER,
+                street TEXT, action_type TEXT, amount REAL,
+                amount_to_call REAL, pot_before REAL, is_all_in INTEGER,
+                sequence INTEGER, spr REAL, mdf REAL
+            );
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY, value TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS action_ev_cache (
+                action_id  INTEGER NOT NULL,
+                hero_id    INTEGER NOT NULL,
+                equity     REAL    NOT NULL,
+                ev         REAL    NOT NULL,
+                ev_type    TEXT    NOT NULL,
+                blended_vpip REAL,
+                blended_pfr REAL,
+                blended_3bet REAL,
+                villain_preflop_action TEXT,
+                contracted_range_size INTEGER,
+                fold_equity_pct REAL,
+                sample_count INTEGER NOT NULL,
+                computed_at TEXT NOT NULL,
+                PRIMARY KEY (action_id, hero_id)
+            );
+            """
+        )
+        conn.close()
+
+        with pytest.raises(RuntimeError, match="action_ev_cache"):
+            init_db(db_path)
+
     @pytest.fixture
     def idb(self, tmp_path):
         from pokerhero.database.db import init_db

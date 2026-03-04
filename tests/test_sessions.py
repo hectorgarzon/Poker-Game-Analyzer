@@ -3110,6 +3110,96 @@ class TestCalculateSessionEvs:
             f"fold_equity_pct must be NULL for allin_exact rows, got {row[0]}"
         )
 
+    def test_allin_bet_pot_to_win_includes_villain_calls(self, db_file):
+        """For a hero all-in BET, allin_exact EV must use pot_before + hero_bet
+        + subsequent villain call(s), not just pot_before + hero_bet.
+
+        Without the villain's call, pot_to_win is understated and EV is wrong.
+        """
+        conn, db_path = db_file
+        from pokerhero.analysis.stats import calculate_session_evs
+
+        hero_id = conn.execute(
+            "INSERT INTO players (username, preferred_name)"
+            " VALUES ('hero_ptw', 'HeroPTW')"
+        ).lastrowid
+        villain_id = conn.execute(
+            "INSERT INTO players (username, preferred_name)"
+            " VALUES ('vil_ptw', 'VilPTW')"
+        ).lastrowid
+        sid = conn.execute(
+            "INSERT INTO sessions"
+            " (game_type, limit_type, max_seats,"
+            "  small_blind, big_blind, ante, start_time)"
+            " VALUES ('NLHE', 'No Limit', 6, 50, 100, 0, '2024-09-01')"
+        ).lastrowid
+        hid = conn.execute(
+            "INSERT INTO hands"
+            " (source_hand_id, session_id, total_pot, uncalled_bet_returned,"
+            "  rake, timestamp, board_flop, board_turn, board_river)"
+            " VALUES ('PTW1', ?, 2200, 0, 0, '2024-09-01T00:00:00',"
+            " 'As 2d 3h', NULL, NULL)",
+            (sid,),
+        ).lastrowid
+        conn.execute(
+            "INSERT INTO hand_players"
+            " (hand_id, player_id, position, starting_stack, hole_cards,"
+            "  vpip, pfr, three_bet, went_to_showdown, net_result)"
+            " VALUES (?, ?, 'BTN', 5000, 'Ac Kd', 1, 1, 0, 1, 1200)",
+            (hid, hero_id),
+        )
+        conn.execute(
+            "INSERT INTO hand_players"
+            " (hand_id, player_id, position, starting_stack, hole_cards,"
+            "  vpip, pfr, three_bet, went_to_showdown, net_result)"
+            " VALUES (?, ?, 'BB', 5000, '2c 3d', 1, 1, 0, 1, -1200)",
+            (hid, villain_id),
+        )
+        conn.execute(
+            "INSERT INTO actions"
+            " (hand_id, player_id, is_hero, street, action_type,"
+            "  amount, amount_to_call, pot_before, is_all_in, sequence)"
+            " VALUES (?, ?, 0, 'PREFLOP', 'RAISE', 300, 0, 150, 0, 1)",
+            (hid, villain_id),
+        )
+        # Hero BETs all-in on the flop: pot_before=200, hero_bet=1000
+        # Villain then calls 1000 (sequence 3)
+        # Expected pot_to_win = 200 + 1000 + 1000 = 2200
+        # Understated pot_to_win = 200 + 1000 = 1200 (wrong)
+        allin_action_id = conn.execute(
+            "INSERT INTO actions"
+            " (hand_id, player_id, is_hero, street, action_type,"
+            "  amount, amount_to_call, pot_before, is_all_in, sequence)"
+            " VALUES (?, ?, 1, 'FLOP', 'BET', 1000, 0, 200, 1, 2)",
+            (hid, hero_id),
+        ).lastrowid
+        # Villain calls the all-in BET
+        conn.execute(
+            "INSERT INTO actions"
+            " (hand_id, player_id, is_hero, street, action_type,"
+            "  amount, amount_to_call, pot_before, is_all_in, sequence)"
+            " VALUES (?, ?, 0, 'FLOP', 'CALL', 1000, 1000, 1200, 1, 3)",
+            (hid, villain_id),
+        )
+        conn.commit()
+
+        calculate_session_evs(db_path, sid, hero_id, self._FAST_SETTINGS)
+        row = conn.execute(
+            "SELECT ev, equity FROM action_ev_cache"
+            " WHERE action_id = ? AND hero_id = ? AND ev_type = 'allin_exact'",
+            (allin_action_id, hero_id),
+        ).fetchone()
+        assert row is not None, "allin_exact row must exist"
+        ev, equity = float(row[0]), float(row[1])
+        # pot_to_win must be 2200 (includes villain's 1000 call); wager = 1000
+        # EV = equity * 2200 - 1000 (not equity * 1200 - 1000)
+        expected_ev_full = equity * 2200.0 - 1000.0
+        expected_ev_understated = equity * 1200.0 - 1000.0
+        assert abs(ev - expected_ev_full) < 1.0, (
+            f"Expected EV≈{expected_ev_full:.1f} (full pot 2200), "
+            f"got {ev:.1f} (understated would be {expected_ev_understated:.1f})"
+        )
+
 
 class TestGetSessionEvStatus:
     """Tests for get_session_ev_status query function."""
