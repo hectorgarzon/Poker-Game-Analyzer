@@ -62,12 +62,12 @@ class _SummaryData(TypedDict):
 _RE_CASH_HEADER = re.compile(
     r"PokerStars Hand #(\d+):\s+Hold'em No Limit"
     r" \(([€$])?(\d+(?:\.\d+)?)/[€$]?(\d+(?:\.\d+)?)(?:\s+[A-Z]+)?\)"
-    r" - (\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})"
+    r" - (\d{4}/\d{2}/\d{2} \d{1,2}:\d{2}:\d{2})"
 )
 _RE_TOURN_HEADER = re.compile(
     r"PokerStars Hand #(\d+): Tournament #(\d+), [\d+]+ Hold'em No Limit"
     r" - (Level [IVX]+) \((\d+)/(\d+)\)"
-    r" - (\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})"
+    r" - (\d{4}/\d{2}/\d{2} \d{1,2}:\d{2}:\d{2})"
 )
 _RE_TABLE = re.compile(r"Table '(.+?)' (\d+)-max.*Seat #(\d+) is the button")
 _RE_SEAT = re.compile(r"Seat (\d+): (.+?) \([€$]?(\d+(?:\.\d+)?) in chips\)(.*)")
@@ -98,7 +98,7 @@ _RE_SUMMARY_COLLECTED = re.compile(r"collected \([€$]?([\d.]+)\)")
 _RE_MUCKS_SHOWDOWN = re.compile(r"^(.+?): mucks hand")
 _RE_SHOWS_SHOWDOWN = re.compile(r"^(.+?): shows \[(.+?)\]")
 _RE_MUCKED_SUMMARY = re.compile(r"mucked \[(.+?)\]")
-_RE_TIMESTAMP = re.compile(r"(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})")
+_RE_TIMESTAMP = re.compile(r"(\d{4}/\d{2}/\d{2} \d{1,2}:\d{2}:\d{2})")
 
 # Lines that should be silently ignored (produce no action)
 _NOISE_PATTERNS = [
