@@ -133,6 +133,14 @@ def cash_eur_blinds() -> ParsedHand:
     return HandParser(hero_username=HERO).parse(text)
 
 
+@pytest.fixture
+def cash_single_digit_hour() -> ParsedHand:
+    """cash_single_digit_hour — USD cash hand whose header timestamp has a
+    single-digit hour (``1:23:57`` rather than ``01:23:57``)."""
+    text = (FIXTURES_DIR / "cash_single_digit_hour.txt").read_text()
+    return HandParser(hero_username=HERO).parse(text)
+
+
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
@@ -1387,6 +1395,38 @@ class TestEuroBlinds:
 
     def test_eur_currency(self, cash_eur_blinds: ParsedHand) -> None:
         assert cash_eur_blinds.session.currency == "EUR"
+
+
+# ===========================================================================
+# TestSingleDigitHour
+# ===========================================================================
+
+
+class TestSingleDigitHour:
+    """PokerStars occasionally emits an unpadded single-digit hour in the
+    header timestamp (e.g. ``2026/03/07 1:23:57 CET``). The header regex must
+    accept both zero-padded and unpadded hours; minutes and seconds remain
+    strictly two digits.
+    """
+
+    def test_header_parses_without_error(
+        self, cash_single_digit_hour: ParsedHand
+    ) -> None:
+        """Regression: parser must not raise ``Cannot parse hand header`` on
+        a single-digit hour."""
+        assert cash_single_digit_hour.hand.hand_id == "259988832958"
+
+    def test_timestamp_hour_is_one(self, cash_single_digit_hour: ParsedHand) -> None:
+        ts = cash_single_digit_hour.hand.timestamp
+        assert ts.year == 2026
+        assert ts.month == 3
+        assert ts.day == 7
+        assert ts.hour == 1
+        assert ts.minute == 23
+        assert ts.second == 57
+
+    def test_usd_currency(self, cash_single_digit_hour: ParsedHand) -> None:
+        assert cash_single_digit_hour.session.currency == "USD"
 
 
 # ===========================================================================
