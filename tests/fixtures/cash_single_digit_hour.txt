@@ -1,0 +1,27 @@
+PokerStars Hand #259988832958:  Hold'em No Limit ($0.01/$0.02 USD) - 2026/03/07 1:23:57 CET [2026/03/06 19:23:57 ET]
+Table 'Erigone VII' 6-max Seat #4 is the button
+Seat 1: villain1 ($2.50 in chips)
+Seat 2: villain2 ($1.80 in chips)
+Seat 3: BluffKing ($3.10 in chips)
+Seat 4: jsalinas96 ($2.00 in chips)
+Seat 5: villain3 ($1.25 in chips)
+Seat 6: villain4 ($4.00 in chips)
+villain3: posts small blind $0.01
+villain4: posts big blind $0.02
+*** HOLE CARDS ***
+Dealt to jsalinas96 [Kh Qh]
+villain1: folds
+villain2: folds
+BluffKing: folds
+jsalinas96: folds
+villain3: folds
+Uncalled bet ($0.01) returned to villain4
+villain4 collected $0.02 from pot
+*** SUMMARY ***
+Total pot $0.02 | Rake $0
+Seat 1: villain1 folded before Flop (didn't bet)
+Seat 2: villain2 folded before Flop (didn't bet)
+Seat 3: BluffKing folded before Flop (didn't bet)
+Seat 4: jsalinas96 (button) folded before Flop (didn't bet)
+Seat 5: villain3 (small blind) folded before Flop
+Seat 6: villain4 (big blind) collected ($0.02)

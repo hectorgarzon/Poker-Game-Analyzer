@@ -41,6 +41,7 @@ Poker hand histories contain hundreds of edge cases. The `tests/fixtures/` direc
 | `cash_decimal_blinds.txt` | Cash | Real-money micro-stakes hand with `$0.01/$0.02` blinds; tests decimal blind parsing |
 | `cash_hero_bb_3bets.txt` | Cash | Hero posts BB then 3-bets preflop; tests SPR calculation when BB is the aggressor |
 | `cash_eur_blinds.txt` | Cash | Real-money EUR hand with `€` currency prefix on all amounts and ` EUR` suffix in header; tests multi-currency parsing |
+| `cash_single_digit_hour.txt` | Cash | USD hand whose header timestamp has an unpadded single-digit hour (`1:23:57` rather than `01:23:57`); regression for PokerStars locales that omit the leading zero |
 | `tournament_standard_with_antes.txt` | Tournament | Standard tournament hand with antes; tests `ante` parsing |
 | `tournament_uncalled_bet.txt` | Tournament | Tournament uncalled bet returned |
 | `tournament_two_way_split_pot.txt` | Tournament | Split pot divided evenly between two players |
