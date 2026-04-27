@@ -1,23 +1,21 @@
 CREATE VIEW jugadores_stack_medio_view AS
 SELECT 
-  player_id,
+  hp.player_id,
   (SELECT 
      AVG(starting_stack) 
    FROM (
      SELECT 
        starting_stack
      FROM hand_players 
-     WHERE player_id = player_id 
+     WHERE player_id = hp.player_id 
      ORDER BY starting_stack 
      LIMIT 1 OFFSET (SELECT 
                       COUNT(*) / 2 
                     FROM hand_players 
-                    WHERE player_id = player_id)
+                    WHERE player_id = hp.player_id)
    )) AS stack_medio
-FROM (
-  SELECT DISTINCT player_id 
-  FROM hand_players
-) AS jugadores;
+FROM hand_players hp
+GROUP BY hp.player_id;
 
 CREATE VIEW jugadores_stats_view AS
 SELECT 
