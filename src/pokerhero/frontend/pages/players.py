@@ -72,6 +72,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
                 "id": int(row["id"]),
                 "username": str(row["username"]),
                 "hands_played": int(row["hands_played"]),
+                "total_bankroll": float(row["total_bankroll"]),
             }
         )
     return dash_table.DataTable(
@@ -79,6 +80,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
         columns=[
             {"name": "Username", "id": "username"},
             {"name": "Hands Played", "id": "hands_played"},
+            {"name": "Benefit", "id": "total_bankroll"},
         ],
         data=rows,
         sort_action="native",
@@ -103,7 +105,7 @@ def _render_players(db_path: str) -> html.Div | str:
     if db_path == ":memory:":
         return html.Div("⚠️ No database connected.", style={"color": "orange"})
 
-    from pokerhero.analysis.queries import get_players  # Necesitarás crear esta función
+    from pokerhero.analysis.queries import get_players 
 
     conn = get_connection(db_path)
     try:

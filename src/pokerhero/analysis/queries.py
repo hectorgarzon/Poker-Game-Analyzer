@@ -17,7 +17,8 @@ def get_players(conn: sqlite3.Connection) -> pd.DataFrame:
     SELECT 
         p.id,
         p.username,
-        COUNT(DISTINCT hp.hand_id) as hands_played
+        COUNT(DISTINCT hp.hand_id) as hands_played,
+        COALESCE(SUM(hp.net_result), 0) AS total_bankroll
     FROM players p
     LEFT JOIN hand_players hp ON p.id = hp.player_id
     GROUP BY p.id, p.username
