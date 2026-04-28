@@ -18,9 +18,11 @@ def get_players(conn: sqlite3.Connection) -> pd.DataFrame:
         p.id,
         p.username,
         COUNT(DISTINCT hp.hand_id) as hands_played,
+        COUNT(DISTINCT DATE(h.timestamp)) as days_seen,
         COALESCE(SUM(hp.net_result), 0) AS total_bankroll
     FROM players p
     LEFT JOIN hand_players hp ON p.id = hp.player_id
+    LEFT JOIN hands h ON h.id = hp.hand_id
     GROUP BY p.id, p.username
     ORDER BY p.username
     """

@@ -73,6 +73,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
                 "username": str(row["username"]),
                 "hands_played": int(row["hands_played"]),
                 "total_bankroll": float(row["total_bankroll"]),
+                "days_seen": float(row["days_seen"]),
             }
         )
     return dash_table.DataTable(
@@ -81,6 +82,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
             {"name": "Username", "id": "username"},
             {"name": "Hands Played", "id": "hands_played"},
             {"name": "Benefit", "id": "total_bankroll"},
+            {"name": "Days", "id": "days_seen"},
         ],
         data=rows,
         sort_action="native",
