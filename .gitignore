@@ -17,3 +17,4 @@ data/*.db
 
 # Diskcache (background callback manager)
 cache/
+.aider*
