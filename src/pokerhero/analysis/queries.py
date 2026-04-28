@@ -21,7 +21,16 @@ def get_players(conn: sqlite3.Connection, hero_id: int) -> pd.DataFrame:
         COUNT(DISTINCT DATE(h.timestamp)) as days_seen,
         COALESCE(SUM(hp.net_result), 0) AS total_bankroll,
         MAX(CASE WHEN hp.went_to_showdown = 1 AND hp_hero.went_to_showdown = 1 THEN hp.net_result END) AS max_win_showdown,
-        MIN(CASE WHEN hp.went_to_showdown = 1 AND hp_hero.went_to_showdown = 1 THEN hp.net_result END) AS max_loss_showdown
+        MIN(CASE WHEN hp.went_to_showdown = 1 AND hp_hero.went_to_showdown = 1 THEN hp.net_result END) AS max_loss_showdown,
+        (
+            SELECT strftime('%H', h2.timestamp)
+            FROM hands h2
+            JOIN hand_players hp2 ON h2.id = hp2.hand_id
+            WHERE hp2.player_id = p.id
+            GROUP BY strftime('%H', h2.timestamp)
+            ORDER BY COUNT(*) DESC
+            LIMIT 1
+        ) AS peak_hour
     FROM players p
     LEFT JOIN hand_players hp ON p.id = hp.player_id
     LEFT JOIN hands h ON h.id = hp.hand_id
