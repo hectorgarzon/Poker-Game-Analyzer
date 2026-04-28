@@ -575,6 +575,12 @@ def _render(
     pfr = pfr_pct(hp_df) * 100
     three_bet = three_bet_pct(opp_df) * 100
 
+    # Get date range
+    min_date = pd.to_datetime(sessions_df['start_time']).min().strftime('%Y-%m-%d')
+    max_date = pd.to_datetime(sessions_df['start_time']).max().strftime('%Y-%m-%d')
+    # min_date = sessions_df['start_time'].min().strftime('%Y-%m-%d')
+    # max_date = sessions_df['start_time'].max().strftime('%Y-%m-%d')
+
     pnl_str = _fmt_pnl(pnl)
     pnl_color = "var(--pnl-positive, green)" if pnl >= 0 else "var(--pnl-negative, red)"
     wr_str = f"{'+' if win_rate >= 0 else ''}{win_rate:.1f} bb/100"
@@ -598,6 +604,7 @@ def _render(
             _kpi_card("VPIP", f"{vpip:.1f}%"),
             _kpi_card("PFR", f"{pfr:.1f}%"),
             _kpi_card("3-Bet", f"{three_bet:.1f}%"),
+            _kpi_card("Dates", f"{min_date} -> {max_date}"),
         ],
     )
 
