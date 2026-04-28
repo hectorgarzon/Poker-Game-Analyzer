@@ -11,6 +11,21 @@ import sqlite3
 import pandas as pd
 
 
+def get_players(conn: sqlite3.Connection) -> pd.DataFrame:
+    """Get all players with basic stats."""
+    query = """
+    SELECT 
+        p.id,
+        p.username,
+        COUNT(DISTINCT hp.hand_id) as hands_played
+    FROM players p
+    LEFT JOIN hand_players hp ON p.id = hp.player_id
+    GROUP BY p.id, p.username
+    ORDER BY p.username
+    """
+    return pd.read_sql_query(query, conn)
+
+
 def get_sessions(
     conn: sqlite3.Connection,
     player_id: int,
