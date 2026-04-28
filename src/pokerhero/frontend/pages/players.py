@@ -8,7 +8,7 @@ from dash import Input, Output, State, callback, dash_table, dcc, html
 import dash
 import pandas as pd
 
-from pokerhero.database.db import get_connection
+from pokerhero.database.db import get_connection, get_setting, upsert_player
 
 dash.register_page(__name__, path="/players", name="Players")
 
@@ -58,6 +58,16 @@ layout = html.Div(
     ],
 )
 
+def _get_hero_player_id(db_path: str) -> int | None:
+    if db_path == ":memory:":
+        return None
+    conn = get_connection(db_path)
+    try:
+        username = get_setting(conn, "hero_username", default="")
+        return upsert_player(conn, username) if username else None
+    finally:
+        conn.close()
+
 def _get_db_path() -> str:
     result: str = dash.get_app().server.config.get("DB_PATH", ":memory:")
     return result
@@ -74,6 +84,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
                 "hands_played": int(row["hands_played"]),
                 "total_bankroll": float(row["total_bankroll"]),
                 "days_seen": float(row["days_seen"]),
+                "max_win_showdown": float(row["max_win_showdown"]),
             }
         )
     return dash_table.DataTable(
@@ -83,6 +94,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
             {"name": "Hands Played", "id": "hands_played"},
             {"name": "Benefit", "id": "total_bankroll"},
             {"name": "Days", "id": "days_seen"},
+            {"name": "Max win when showdown", "id": "max_win_showdown"},
         ],
         data=rows,
         sort_action="native",
@@ -107,11 +119,18 @@ def _render_players(db_path: str) -> html.Div | str:
     if db_path == ":memory:":
         return html.Div("⚠️ No database connected.", style={"color": "orange"})
 
+    player_id = _get_hero_player_id(db_path)
+    if player_id is None:
+        return html.Div(
+            "⚠️ No hero username set. Please set it on the Upload page first.",
+            style={"color": "orange"},
+        )
+
     from pokerhero.analysis.queries import get_players 
 
     conn = get_connection(db_path)
     try:
-        df = get_players(conn)
+        df = get_players(conn,player_id)
     finally:
         conn.close()
 

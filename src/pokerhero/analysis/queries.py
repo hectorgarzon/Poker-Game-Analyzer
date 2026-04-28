@@ -11,22 +11,26 @@ import sqlite3
 import pandas as pd
 
 
-def get_players(conn: sqlite3.Connection) -> pd.DataFrame:
-    """Get all players with basic stats."""
+def get_players(conn: sqlite3.Connection, hero_id: int) -> pd.DataFrame:
+    """Get all players with basic stats including showdown performance vs hero."""
     query = """
-    SELECT 
+    SELECT
         p.id,
         p.username,
         COUNT(DISTINCT hp.hand_id) as hands_played,
         COUNT(DISTINCT DATE(h.timestamp)) as days_seen,
-        COALESCE(SUM(hp.net_result), 0) AS total_bankroll
+        COALESCE(SUM(hp.net_result), 0) AS total_bankroll,
+        MAX(CASE WHEN hp.went_to_showdown = 1 AND hp_hero.went_to_showdown = 1 THEN hp.net_result END) AS max_win_showdown,
+        MIN(CASE WHEN hp.went_to_showdown = 1 AND hp_hero.went_to_showdown = 1 THEN hp.net_result END) AS max_loss_showdown
     FROM players p
     LEFT JOIN hand_players hp ON p.id = hp.player_id
     LEFT JOIN hands h ON h.id = hp.hand_id
+    LEFT JOIN hand_players hp_hero ON h.id = hp_hero.hand_id AND hp_hero.player_id = :hero_id
+    WHERE p.id != :hero_id
     GROUP BY p.id, p.username
     ORDER BY p.username
     """
-    return pd.read_sql_query(query, conn)
+    return pd.read_sql_query(query, conn, params={"hero_id": int(hero_id)})
 
 
 def get_sessions(
