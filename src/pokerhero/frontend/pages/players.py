@@ -86,6 +86,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
                 "days_seen": float(row["days_seen"]),
                 "max_win_showdown": float(row["max_win_showdown"]),
                 "peak_hour": str(row["peak_hour"]) if pd.notna(row["peak_hour"]) else "",
+                "peak_hour_days": int(row["peak_hour_days"]) if pd.notna(row["peak_hour_days"]) else 0,
             }
         )
     return dash_table.DataTable(
@@ -97,6 +98,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
             {"name": "Days", "id": "days_seen"},
             {"name": "Max win when showdown", "id": "max_win_showdown"},
             {"name": "Peak Hour", "id": "peak_hour"},
+            {"name": "Days at Peak Hour", "id": "peak_hour_days"},
         ],
         data=rows,
         sort_action="native",

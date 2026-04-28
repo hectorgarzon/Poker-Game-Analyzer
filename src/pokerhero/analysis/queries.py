@@ -30,7 +30,16 @@ def get_players(conn: sqlite3.Connection, hero_id: int) -> pd.DataFrame:
             GROUP BY strftime('%H', h2.timestamp)
             ORDER BY COUNT(*) DESC
             LIMIT 1
-        ) AS peak_hour
+        ) AS peak_hour,
+        (
+            SELECT COUNT(DISTINCT DATE(h2.timestamp))
+            FROM hands h2
+            JOIN hand_players hp2 ON h2.id = hp2.hand_id
+            WHERE hp2.player_id = p.id
+            GROUP BY strftime('%H', h2.timestamp)
+            ORDER BY COUNT(*) DESC
+            LIMIT 1
+        ) AS peak_hour_days
     FROM players p
     LEFT JOIN hand_players hp ON p.id = hp.player_id
     LEFT JOIN hands h ON h.id = hp.hand_id
