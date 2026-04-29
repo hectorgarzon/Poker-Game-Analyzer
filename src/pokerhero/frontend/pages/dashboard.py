@@ -592,19 +592,36 @@ def _render(
         id="kpi-section",
         style={
             "display": "flex",
-            "gap": "12px",
-            "flexWrap": "wrap",
-            "marginBottom": "24px",
+            "flex-direction": "column",
         },
         children=[
-            _kpi_card("Total P&L", pnl_str, color=pnl_color),
-            _kpi_card("Win Rate", wr_str, color=wr_color),
-            _kpi_card("Sessions", str(n_sessions)),
-            _kpi_card("Hands Played", str(n_hands)),
-            _kpi_card("VPIP", f"{vpip:.1f}%"),
-            _kpi_card("PFR", f"{pfr:.1f}%"),
-            _kpi_card("3-Bet", f"{three_bet:.1f}%"),
-            _kpi_card("Dates", f"{min_date} -> {max_date}"),
+            html.Div(
+                style={
+                    "display": "flex",
+                    "gap": "12px",
+                    "align-items": "center",
+                    "marginBottom": "12px",
+                },
+                children=[
+                    _kpi_card("Dates", f"{min_date} -> {max_date}"),
+                    _kpi_card("Sessions", str(n_sessions)),
+                    _kpi_card("Hands Played", str(n_hands)),
+                ],
+            ),
+            html.Div(
+                style={
+                    "display": "flex",
+                    "gap": "12px",
+                    "align-items": "center",
+                },
+                children=[
+                    _kpi_card("Total P&L", pnl_str, color=pnl_color),
+                    _kpi_card("Win Rate", wr_str, color=wr_color),
+                    _kpi_card("VPIP", f"{vpip:.1f}%"),
+                    _kpi_card("PFR", f"{pfr:.1f}%"),
+                    _kpi_card("3-Bet", f"{three_bet:.1f}%"),
+                ],
+            ),
         ],
     )
 
