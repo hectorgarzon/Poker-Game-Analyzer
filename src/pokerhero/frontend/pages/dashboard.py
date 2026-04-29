@@ -786,9 +786,9 @@ def _render(
     return html.Div(
         [
             kpi_section,
-            bankroll_section,
-            _build_vpip_pfr_chart(vpip / 100, pfr / 100, theme=theme),
-            positional_section,
+            # bankroll_section,
+            # _build_vpip_pfr_chart(vpip / 100, pfr / 100, theme=theme),
+            # positional_section,
             _build_highlights(hp_df, sessions_df),
         ]
     )
