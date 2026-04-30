@@ -59,7 +59,7 @@ layout = html.Div(
                 dcc.RadioItems(
                     id="dashboard-period",
                     options=_PERIOD_OPTIONS,
-                    value="all",
+                    value="7d",
                     inline=True,
                     inputStyle={"marginRight": "4px"},
                     labelStyle={"marginRight": "16px", "fontSize": "13px"},
