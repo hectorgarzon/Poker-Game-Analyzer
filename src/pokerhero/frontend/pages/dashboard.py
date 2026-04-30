@@ -556,16 +556,16 @@ def _render(
         sessions_df = get_sessions(
             conn, player_id, since_date=since_date, currency_type=currency_type
         )
-        timeline_df = get_hero_timeline(
-            conn, player_id, since_date=since_date, currency_type=currency_type
-        )
-        actions_df = get_hero_actions(
-            conn, player_id, since_date=since_date, currency_type=currency_type
-        )
+        # timeline_df = get_hero_timeline(
+        #     conn, player_id, since_date=since_date, currency_type=currency_type
+        # )
+        # actions_df = get_hero_actions(
+        #     conn, player_id, since_date=since_date, currency_type=currency_type
+        # )
         opp_df = get_hero_opportunity_actions(
             conn, player_id, since_date=since_date, currency_type=currency_type
         )
-        tl_targets = read_target_settings(conn)
+        # tl_targets = read_target_settings(conn)
     finally:
         conn.close()
 
@@ -631,6 +631,7 @@ def _render(
         ],
     )
 
+    """ Commented out to reduce load time
     # --- Bankroll graph ---
     import plotly.graph_objects as go
 
@@ -788,6 +789,7 @@ def _render(
             ),
         ],
     )
+    """
 
     return html.Div(
         [
