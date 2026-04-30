@@ -113,6 +113,7 @@ _TD: dict[str, str] = {
     "borderBottom": "1px solid var(--border-light, #eee)",
     "fontSize": "13px",
 }
+_KPI_FIRST_LINE_FONT_SIZE = "18px"
 
 
 # ---------------------------------------------------------------------------
@@ -614,9 +615,11 @@ def _render(
                     "marginBottom": "12px",
                 },
                 children=[
-                    _kpi_card("Dates", f"{min_date} -> {max_date}", font_size="18px"),
-                    _kpi_card("Sessions", str(n_sessions)),
-                    _kpi_card("Hands Played", str(n_hands)),
+                    _kpi_card("Dates", f"{min_date} -> {max_date}", font_size=_KPI_FIRST_LINE_FONT_SIZE),
+                    _kpi_card("Sessions", str(n_sessions), font_size=_KPI_FIRST_LINE_FONT_SIZE),
+                    _kpi_card("Hands Played", str(n_hands), font_size=_KPI_FIRST_LINE_FONT_SIZE),
+                    _kpi_card("Total P&L", pnl_str, color=pnl_color, font_size=_KPI_FIRST_LINE_FONT_SIZE),
+                    _kpi_card("Win Rate", wr_str, color=wr_color, font_size=_KPI_FIRST_LINE_FONT_SIZE),
                 ],
             ),
             html.Div(
@@ -626,8 +629,6 @@ def _render(
                     "align-items": "center",
                 },
                 children=[
-                    _kpi_card("Total P&L", pnl_str, color=pnl_color),
-                    _kpi_card("Win Rate", wr_str, color=wr_color),
                     _kpi_card("VPIP", f"{vpip:.1f}%", color=get_vpip_color(vpip)),
                     _kpi_card("PFR", f"{pfr:.1f}%"),
                     _kpi_card("3-Bet", f"{three_bet:.1f}%"),
