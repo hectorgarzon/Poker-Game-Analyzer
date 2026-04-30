@@ -162,18 +162,38 @@ def _render_players(db_path: str) -> html.Div | str:
 
     filter_bar = html.Div(
         [
-            dcc.Input(
-                id="player-filter-username",
-                type="text",
-                placeholder="Search by username...",
-                debounce=True,
-                style={**_input_style, "minWidth": "200px"},
+            html.Div(
+                [
+                    html.Span("Username:", style={"fontSize": "13px", "marginRight": "5px"}),
+                    dcc.Input(
+                        id="player-filter-username",
+                        type="text",
+                        placeholder="name...",
+                        debounce=True,
+                        style={**_input_style, "width": "150px"},
+                    ),
+                ],
+                style={"display": "flex", "alignItems": "center"}
+            ),
+            html.Div(
+                [
+                    html.Span("Min Hands:", style={"fontSize": "13px", "marginRight": "5px"}),
+                    dcc.Input(
+                        id="player-filter-min-hands",
+                        type="number",
+                        placeholder="0",
+                        min=0,
+                        debounce=True,
+                        style={**_input_style, "width": "80px"},
+                    ),
+                ],
+                style={"display": "flex", "alignItems": "center"}
             ),
         ],
         style={
             "display": "flex",
             "alignItems": "center",
-            "gap": "8px",
+            "gap": "40px",
             "flexWrap": "wrap",
             "marginBottom": "12px",
             "padding": "8px 10px",
@@ -207,18 +227,23 @@ def _render(pathname: str) -> tuple[html.Div, html.Div | str]:
 @callback(
     Output("player-table", "data"),
     Input("player-filter-username", "value"),
+    Input("player-filter-min-hands", "value"),
     State("player-data-store", "data"),
     prevent_initial_call=True,
 )
 def _apply_player_filters(
     username: str | None,
+    min_hands: int | None,
     data: list[dict[str, Any]] | None,
 ) -> list[dict[str, Any]]:
     if not data:
         raise dash.exceptions.PreventUpdate
     df = pd.DataFrame(data)
-    
+
     if username:
         df = df[df["username"].str.contains(username, case=False, na=False)]
-    
+
+    if min_hands is not None:
+        df = df[df["hands_played"] >= min_hands]
+
     return list(_build_player_table(df).data)
