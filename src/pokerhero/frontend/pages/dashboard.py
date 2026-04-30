@@ -216,13 +216,14 @@ def _kpi_card(
     label: str,
     value: str,
     color: str = "var(--text-1, #333)",
+    font_size: str = "28px",  # Parámetro añadido
 ) -> html.Div:
     return html.Div(
         [
             html.Div(
                 value,
                 style={
-                    "fontSize": "28px",
+                    "fontSize": font_size,  # Aplicación del estilo CSS
                     "fontWeight": "700",
                     "color": color,
                     "lineHeight": "1.2",
@@ -606,7 +607,7 @@ def _render(
                     "marginBottom": "12px",
                 },
                 children=[
-                    _kpi_card("Dates", f"{min_date} -> {max_date}"),
+                    _kpi_card("Dates", f"{min_date} -> {max_date}", font_size="18px"),
                     _kpi_card("Sessions", str(n_sessions)),
                     _kpi_card("Hands Played", str(n_hands)),
                 ],
