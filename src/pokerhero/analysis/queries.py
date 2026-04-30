@@ -518,7 +518,6 @@ def get_session_kpis(
             hp.net_result,
             hp.position,
             hp.hole_cards,
-            hp.limp,
             s.big_blind,
             CASE WHEN EXISTS (
                 SELECT 1 FROM actions a
