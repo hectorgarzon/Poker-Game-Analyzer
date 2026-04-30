@@ -1413,7 +1413,7 @@ def _build_session_table(df: pd.DataFrame) -> Any:  # dash_table has no mypy stu
             {"name": "Stakes", "id": "stakes"},
             {"name": "Hands", "id": "hands"},
             {"name": "Duration (min)", "id": "duration_minutes"},
-            {"name": "Net P&L", "id": "_pnl_raw", "type": "numeric"},
+            {"name": "Net P&L", "id": "_pnl_raw", "type": "numeric", "format": {"specifier": ".1f"}},
             {"name": "EV Status", "id": "ev_status"},
         ],
         data=rows,
