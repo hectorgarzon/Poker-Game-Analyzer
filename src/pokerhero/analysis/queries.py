@@ -360,6 +360,16 @@ def get_hero_hand_players(
             hp.net_result,
             hp.position,
             hp.hole_cards,
+            CASE
+                WHEN EXISTS (
+                    SELECT 1 FROM actions a
+                    WHERE a.hand_id = hp.hand_id
+                    AND a.player_id = hp.player_id
+                    AND a.street = 'PREFLOP'
+                    AND a.action_type IN ('CALL', 'BIG_BLIND')
+                ) THEN 1
+                ELSE 0
+            END AS limp,
             s.big_blind,
             CASE WHEN EXISTS (
                 SELECT 1 FROM actions a
@@ -495,6 +505,7 @@ def get_session_kpis(
             hp.net_result,
             hp.position,
             hp.hole_cards,
+            hp.limp,
             s.big_blind,
             CASE WHEN EXISTS (
                 SELECT 1 FROM actions a
