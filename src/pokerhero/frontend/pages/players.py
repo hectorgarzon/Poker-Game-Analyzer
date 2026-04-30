@@ -30,11 +30,13 @@ _TH = {
 }
 
 _TD = {
-    "padding": "9px 12px",
-    "borderBottom": "1px solid var(--border-light, #eee)",
-    "fontSize": "13px",
-    "cursor": "pointer",
-}
+        "padding": "6px 8px",
+        "borderBottom": "1px solid var(--border-light, #eee)",
+        "fontSize": "13px",
+        "maxWidth": "80px",
+        "whiteSpace": "normal",
+        "wordBreak": "break-word"
+    }
 
 # Layout
 layout = html.Div(
@@ -74,7 +76,14 @@ def _get_db_path() -> str:
 
 def _build_player_table(df: pd.DataFrame) -> Any:
     """Render a filtered players DataFrame as a sortable DataTable."""
-    _col_style = {"textAlign": "left", "padding": "8px 12px", "fontSize": "14px"}
+    _col_style = {
+        "textAlign": "left",
+        "padding": "8px 12px",
+        "fontSize": "14px",
+        "maxWidth": "80px",
+        "whiteSpace": "normal",
+        "wordBreak": "break-word"
+    }
     rows = []
     for _, row in df.iterrows():
         rows.append(
@@ -93,9 +102,9 @@ def _build_player_table(df: pd.DataFrame) -> Any:
         id="player-table",
         columns=[
             {"name": "Username", "id": "username"},
-            {"name": "Hands Played", "id": "hands_played"},
+            {"name": "Hands", "id": "hands_played"},
             {"name": "Benefit", "id": "total_bankroll"},
-            {"name": "Days", "id": "days_seen"},
+            {"name": "Days played", "id": "days_seen"},
             {"name": "Max win when showdown", "id": "max_win_showdown"},
             {"name": "Peak Hour", "id": "peak_hour"},
             {"name": "Days at Peak Hour", "id": "peak_hour_days"},
