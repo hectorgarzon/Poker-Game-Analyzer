@@ -23,11 +23,11 @@ def get_players(conn: sqlite3.Connection, hero_id: int) -> pd.DataFrame:
         MAX(CASE WHEN hp.went_to_showdown = 1 AND hp_hero.went_to_showdown = 1 THEN hp.net_result END) AS max_win_showdown,
         MIN(CASE WHEN hp.went_to_showdown = 1 AND hp_hero.went_to_showdown = 1 THEN hp.net_result END) AS max_loss_showdown,
         (
-            SELECT DATE(MAX(h2.timestamp))
+            SELECT julianday('now') - julianday(MAX(h2.timestamp))
             FROM hands h2
             JOIN hand_players hp2 ON h2.id = hp2.hand_id
             WHERE hp2.player_id = p.id
-        ) AS last_played_date,
+        ) AS days_since_last_played,
         (
             SELECT strftime('%H', h2.timestamp)
             FROM hands h2

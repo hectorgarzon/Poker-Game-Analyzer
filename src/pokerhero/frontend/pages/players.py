@@ -94,7 +94,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
                 "total_bankroll": float(row["total_bankroll"]),
                 "days_seen": float(row["days_seen"]),
                 "max_win_showdown": float(row["max_win_showdown"]),
-                "last_played_date": str(row["last_played_date"]) if pd.notna(row["last_played_date"]) else "",
+                "days_since_last_played": int(row["days_since_last_played"]) if pd.notna(row["days_since_last_played"]) else 0,
                 "peak_hour": str(row["peak_hour"]) if pd.notna(row["peak_hour"]) else "",
                 "peak_hour_days": int(row["peak_hour_days"]) if pd.notna(row["peak_hour_days"]) else 0,
             }
@@ -106,7 +106,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
             {"name": "Hands", "id": "hands_played"},
             {"name": "Benefit", "id": "total_bankroll"},
             {"name": "Days played", "id": "days_seen"},
-            {"name": "Last Played", "id": "last_played_date"},
+            {"name": "Days since last time", "id": "days_since_last_played"},
             {"name": "Max win when showdown", "id": "max_win_showdown"},
             {"name": "Peak Hour", "id": "peak_hour"},
             {"name": "Days at Peak Hour", "id": "peak_hour_days"},
