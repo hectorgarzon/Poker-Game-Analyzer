@@ -98,7 +98,10 @@ def get_sessions(
             s.currency,
             s.is_favorite,
             COUNT(h.id)                     AS hands_played,
-            COALESCE(SUM(hp.net_result), 0) AS net_profit
+            COALESCE(SUM(hp.net_result), 0) AS net_profit,
+            ROUND(
+                (julianday(MAX(h.timestamp)) - julianday(MIN(h.timestamp))) * 1440
+            ) AS duration_minutes
         FROM sessions s
         LEFT JOIN hands h  ON h.session_id = s.id
         LEFT JOIN hand_players hp ON hp.hand_id = h.id AND hp.player_id = :pid

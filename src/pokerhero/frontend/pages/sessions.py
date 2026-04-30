@@ -1399,15 +1399,17 @@ def _build_session_table(df: pd.DataFrame) -> Any:  # dash_table has no mypy stu
                 ),
                 "hands": int(row["hands_played"]),
                 "_pnl_raw": pnl,
+                "duration_minutes": int(row["duration_minutes"]) if pd.notna(row["duration_minutes"]) else 0,
                 "ev_status": str(row.get("ev_status", "📊 Calculate")),
             }
         )
-    return dash_table.DataTable(  # type: ignore[attr-defined]
+    return dash_table.DataTable(
         id="session-table",
         columns=[
             {"name": "Date", "id": "date"},
             {"name": "Stakes", "id": "stakes"},
             {"name": "Hands", "id": "hands"},
+            {"name": "Duration (min)", "id": "duration_minutes"},
             {"name": "Net P&L", "id": "_pnl_raw", "type": "numeric"},
             {"name": "EV Status", "id": "ev_status"},
         ],
