@@ -17,6 +17,8 @@ from pokerhero.database.db import get_connection, get_setting, upsert_player
 dash.register_page(__name__, path="/dashboard", name="Overall Stats")  # type: ignore[no-untyped-call]
 
 _PERIOD_OPTIONS = [
+    {"label": "Today", "value": "today"},
+    {"label": "Yesterday and today", "value": "2d"},
     {"label": "7 days", "value": "7d"},
     {"label": "1 month", "value": "1m"},
     {"label": "1 year", "value": "1y"},
@@ -151,6 +153,10 @@ def _period_to_since_date(period: str) -> str | None:
     from datetime import date, timedelta
 
     today = date.today()
+    if period == "today":
+        return today.isoformat()
+    if period == "2d":
+        return (today - timedelta(days=1)).isoformat()
     if period == "7d":
         return (today - timedelta(days=7)).isoformat()
     if period == "1m":
