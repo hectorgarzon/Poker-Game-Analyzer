@@ -535,6 +535,7 @@ def _render(
     from pokerhero.analysis.stats import (
         aggression_factor,
         cbet_pct,
+        limp_pct,
         pfr_pct,
         three_bet_pct,
         total_profit,
@@ -574,7 +575,7 @@ def _render(
     vpip = vpip_pct(hp_df) * 100
     pfr = pfr_pct(hp_df) * 100
     three_bet = three_bet_pct(opp_df) * 100
-    limp = hp_df['limp'].mean() * 100
+    limp = limp_pct(hp_df) * 100
 
     # Get date range
     min_date = pd.to_datetime(sessions_df['start_time']).min().strftime('%Y-%m-%d')

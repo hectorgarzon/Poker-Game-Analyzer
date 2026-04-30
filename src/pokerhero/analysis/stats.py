@@ -47,6 +47,21 @@ def pfr_pct(hp_df: pd.DataFrame) -> float:
     return float(hp_df["pfr"].mean())
 
 
+def limp_pct(hp_df: pd.DataFrame) -> float:
+    """Fraction of hands where hero entered the pot by limping.
+
+    Limp% = COUNT(limp=1) / total_hands
+
+    Args:
+        hp_df: DataFrame with a 'limp' column (integer 0/1).
+
+    Returns:
+        Float in [0.0, 1.0]. Returns 0.0 for empty input.
+    """
+    if hp_df.empty:
+        return 0.0
+    return float(hp_df["limp"].mean())
+
 def win_rate_bb100(hp_df: pd.DataFrame) -> float:
     """Win rate expressed in big blinds won per 100 hands (bb/100).
 
