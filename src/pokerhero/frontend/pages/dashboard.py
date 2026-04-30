@@ -38,6 +38,8 @@ _CURRENCY_OPTIONS = [
     {"label": "Play Money", "value": "play"},
 ]
 
+FONT_SIZE_ADJUSTMENT = 10
+
 # ---------------------------------------------------------------------------
 # Layout
 # ---------------------------------------------------------------------------
@@ -252,14 +254,31 @@ def _kpi_card(
                     ),
                     html.Div(
                         [
-                            html.Span(" ", style={"display": "inline-block", "width": "12px"}),
-                            html.Span(f"({prev_value})", style={
-                                "fontSize": font_size,
-                                "fontWeight": "700",
-                                "color": prev_color if prev_color else "var(--text-4, #888)",
-                                "lineHeight": "1.2",
-                                "display": "inline-block",
-                            }),
+                            html.Span(" ", style={"display": "inline-block", "width": "8px"}),
+                            html.Span(
+                                f"({prev_value})" if prev_value else "",
+                                style={
+                                    "fontSize": (
+                                        str(int(font_size[:-2]) + FONT_SIZE_ADJUSTMENT) + "px"
+                                        if prev_value is not None
+                                        and prev_color is not None
+                                        and prev_value != ""
+                                        and float(prev_value.rstrip("%")) > float(value.rstrip("%"))
+                                        else (
+                                            str(int(font_size[:-2]) - FONT_SIZE_ADJUSTMENT) + "px"
+                                            if prev_value is not None
+                                            and prev_color is not None
+                                            and prev_value != ""
+                                            and float(prev_value.rstrip("%")) < float(value.rstrip("%"))
+                                            else font_size
+                                        )
+                                    ),
+                                    "fontWeight": "700",
+                                    "color": prev_color if prev_color else "var(--text-4, #888)",
+                                    "lineHeight": "1.2",
+                                    "display": "inline-block",
+                                },
+                            ),
                         ],
                         style={"display": "inline-block"},
                     ) if prev_value is not None and prev_color is not None else "",
