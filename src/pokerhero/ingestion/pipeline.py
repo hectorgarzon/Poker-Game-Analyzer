@@ -166,4 +166,8 @@ def ingest_directory(
     return [
         ingest_file(txt_file, hero_username, conn)
         for txt_file in sorted(Path(dir_path).glob("*.txt"))
+        if txt_file.name.startswith("HH")
+        and "Dinero ficticio" not in txt_file.name
+        and "€" in txt_file.name
+        and " T" not in txt_file.name
     ]
