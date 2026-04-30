@@ -231,19 +231,40 @@ _TL_COLORS: dict[str, str] = {
 def _kpi_card(
     label: str,
     value: str,
+    prev_value: str | None = None,
     color: str = "var(--text-1, #333)",
-    font_size: str = "28px",  # Parámetro añadido
+    prev_color: str | None = None,
+    font_size: str = "28px",
 ) -> html.Div:
     return html.Div(
         [
             html.Div(
-                value,
-                style={
-                    "fontSize": font_size,
-                    "fontWeight": "700",
-                    "color": color,
-                    "lineHeight": "1.2",
-                },
+                [
+                    html.Div(
+                        value,
+                        style={
+                            "fontSize": font_size,
+                            "fontWeight": "700",
+                            "color": color,
+                            "lineHeight": "1.2",
+                            "display": "inline-block",
+                        },
+                    ),
+                    html.Div(
+                        [
+                            html.Span(" ", style={"display": "inline-block", "width": "12px"}),
+                            html.Span(f"({prev_value})", style={
+                                "fontSize": font_size,
+                                "fontWeight": "700",
+                                "color": prev_color if prev_color else "var(--text-4, #888)",
+                                "lineHeight": "1.2",
+                                "display": "inline-block",
+                            }),
+                        ],
+                        style={"display": "inline-block"},
+                    ) if prev_value is not None and prev_color is not None else "",
+                ],
+                style={"textAlign": "center"},
             ),
             html.Div(
                 label,
@@ -663,23 +684,31 @@ def _render(
                 children=[
                     _kpi_card(
                         "VPIP",
-                        f"{vpip:.1f}% ({vpip_prev:.1f}%)",
-                        color=get_vpip_color(vpip)
+                        f"{vpip:.1f}%",
+                        prev_value=f"{vpip_prev:.1f}%",
+                        color=get_vpip_color(vpip),
+                        prev_color=get_vpip_color(vpip_prev),
                     ),
                     _kpi_card(
                         "PFR",
-                        f"{pfr:.1f}% ({pfr_prev:.1f}%)",
-                        color=get_pfr_color(pfr)
+                        f"{pfr:.1f}%",
+                        prev_value=f"{pfr_prev:.1f}%",
+                        color=get_pfr_color(pfr),
+                        prev_color=get_pfr_color(pfr_prev),
                     ),
                     _kpi_card(
                         "3-Bet",
-                        f"{three_bet:.1f}% ",
-                        color=get_3bet_color(three_bet)
+                        f"{three_bet:.1f}%",
+                        prev_value=f"",
+                        color=get_3bet_color(three_bet),
+                        prev_color=get_3bet_color(three_bet),
                     ),
                     _kpi_card(
                         "LIMP",
-                        f"{limp:.1f}% ({limp_prev:.1f}%)",
-                        color=get_limp_color(limp)
+                        f"{limp:.1f}%",
+                        prev_value=f"{limp_prev:.1f}%",
+                        color=get_limp_color(limp),
+                        prev_color=get_limp_color(limp_prev),
                     ),
                 ],
             ),
