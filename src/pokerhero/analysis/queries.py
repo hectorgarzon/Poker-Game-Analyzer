@@ -181,7 +181,7 @@ def get_hands(
             GROUP BY a.hand_id
         ) ev_flags ON ev_flags.hand_id = h.id
         WHERE h.session_id = ?
-        ORDER BY h.timestamp ASC
+        ORDER BY h.timestamp DESC
     """
     return pd.read_sql_query(
         sql,
