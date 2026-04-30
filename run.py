@@ -29,8 +29,9 @@ if __name__ == "__main__":
         conn = get_connection(DB_PATH)
         hero = get_setting(conn, "hero_username", default="")
         if hero:
-            print(f"Cargando manos automáticamente desde {hand_dir}...")
+            print(f"Cargando nuevas manos automáticamente desde {hand_dir}...")
             ingest_directory(hand_dir, hero, conn)
+            print(f"Los ficheros han sido leidos correctamente")
         else:
             print("No se pudo cargar automáticamente: 'hero_username' no configurado en la base de datos.")
         conn.close()

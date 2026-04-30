@@ -151,23 +151,33 @@ def ingest_directory(
     hero_username: str,
     conn: sqlite3.Connection,
 ) -> list[IngestResult]:
-    """Ingest all .txt files in a directory.
+    """Ingest all .txt files in a directory, skipping already processed ones."""
+    dir_path = Path(dir_path)
+    # El archivo se creará en el directorio de ejecución donde se encuentra run.py
+    log_path = Path("processed_files.txt")
 
-    Files are processed in sorted order. Non-.txt files are ignored.
+    # Leer archivos ya procesados
+    processed_files = set()
+    if log_path.exists():
+        processed_files = set(log_path.read_text(encoding="utf-8").splitlines())
 
-    Args:
-        dir_path: Path to the directory containing .txt session files.
-        hero_username: The hero's PokerStars username.
-        conn: An open SQLite connection (created via init_db).
-
-    Returns:
-        List of IngestResult, one per .txt file found.
-    """
-    return [
-        ingest_file(txt_file, hero_username, conn)
-        for txt_file in sorted(Path(dir_path).glob("*.txt"))
-        if txt_file.name.startswith("HH")
-        and "Dinero ficticio" not in txt_file.name
-        and "€" in txt_file.name
-        and " T" not in txt_file.name
+    results = []
+    # Filtrar archivos por nombre y por estado de procesamiento
+    files_to_process = [
+        f for f in sorted(dir_path.glob("*.txt"))
+        if f.name.startswith("HH")
+        and "Dinero ficticio" not in f.name
+        and "€" in f.name
+        and " T" not in f.name
+        and f.name not in processed_files
     ]
+
+    for txt_file in files_to_process:
+        res = ingest_file(txt_file, hero_username, conn)
+        results.append(res)
+
+        # Registrar el archivo como procesado
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"{txt_file.name}\n")
+
+    return results
