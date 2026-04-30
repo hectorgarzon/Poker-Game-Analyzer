@@ -19,6 +19,9 @@ from pokerhero.analysis.traffic_colors_kpis import (
 )
 from pokerhero.database.db import get_connection, get_setting, upsert_player
 
+from datetime import datetime
+
+
 dash.register_page(__name__, path="/dashboard", name="Overall Stats")  # type: ignore[no-untyped-call]
 
 _PERIOD_OPTIONS = [
@@ -562,8 +565,22 @@ def _render(
 
     conn = get_connection(db_path)
     try:
+        # This period
         hp_df = get_hero_hand_players(
             conn, player_id, since_date=since_date, end_date=current_end_date, currency_type=currency_type
+        )
+        # Previous period
+        # Convert to datetime objects
+        since_date_dt = datetime.strptime(since_date, "%Y-%m-%d").date()
+        current_end_date_dt = datetime.strptime(current_end_date, "%Y-%m-%d").date()
+
+        # Calculate diff in days
+        period_days = (current_end_date_dt - since_date_dt).days
+
+        previous_start_date = (date.today() - timedelta(days=period_days*2)).isoformat()
+        previous_end_date = (date.today() - timedelta(days=period_days)).isoformat()
+        hp_df_prev = get_hero_hand_players(
+            conn, player_id, since_date=previous_start_date, end_date=previous_end_date, currency_type=currency_type
         )
         sessions_df = get_sessions(
             conn, player_id, since_date=since_date, currency_type=currency_type
@@ -589,10 +606,17 @@ def _render(
     win_rate = win_rate_bb100(hp_df)
     n_sessions = len(sessions_df)
     n_hands = len(hp_df)
+    # Kpis for current period
     vpip = vpip_pct(hp_df) * 100
     pfr = pfr_pct(hp_df) * 100
     three_bet = three_bet_pct(opp_df) * 100
     limp = limp_pct(hp_df) * 100
+
+    # Kpis for previous period
+    vpip_prev = vpip_pct(hp_df_prev) * 100
+    pfr_prev = pfr_pct(hp_df_prev) * 100
+    # three_bet_prev = three_bet_pct(opp_df_prev) * 100
+    limp_prev = limp_pct(hp_df_prev) * 100
 
     # Get date range
     min_date = pd.to_datetime(sessions_df['start_time']).min().strftime('%Y-%m-%d')
@@ -634,10 +658,26 @@ def _render(
                     "align-items": "center",
                 },
                 children=[
-                    _kpi_card("VPIP", f"{vpip:.1f}%", color=get_vpip_color(vpip)),
-                    _kpi_card("PFR", f"{pfr:.1f}%", color=get_pfr_color(pfr)),
-                    _kpi_card("3-Bet", f"{three_bet:.1f}%", color=get_3bet_color(three_bet)),
-                    _kpi_card("LIMP", f"{limp:.1f}%", color=get_limp_color(limp)),
+                    _kpi_card(
+                        "VPIP",
+                        f"{vpip:.1f}% ({vpip_prev:.1f}%)",
+                        color=get_vpip_color(vpip)
+                    ),
+                    _kpi_card(
+                        "PFR",
+                        f"{pfr:.1f}% ({pfr_prev:.1f}%)",
+                        color=get_pfr_color(pfr)
+                    ),
+                    _kpi_card(
+                        "3-Bet",
+                        f"{three_bet:.1f}% ",
+                        color=get_3bet_color(three_bet)
+                    ),
+                    _kpi_card(
+                        "LIMP",
+                        f"{limp:.1f}% ({limp_prev:.1f}%)",
+                        color=get_limp_color(limp)
+                    ),
                 ],
             ),
         ],
