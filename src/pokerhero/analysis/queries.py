@@ -322,6 +322,7 @@ def get_hero_hand_players(
     conn: sqlite3.Connection,
     player_id: int,
     since_date: str | None = None,
+    end_date: str | None = None,
     currency_type: str | None = None,
 ) -> pd.DataFrame:
     """Return all hand_player rows for hero with session context and saw_flop flag.
@@ -344,6 +345,7 @@ def get_hero_hand_players(
         DataFrame with one row per hand hero participated in.
     """
     date_clause = "AND h.timestamp >= :since" if since_date else ""
+    end_date_clause = f"AND h.timestamp <= :end_date" if end_date else ""
     if currency_type == "real":
         currency_clause = "AND s.currency IN ('USD', 'EUR')"
     elif currency_type == "play":
@@ -380,12 +382,14 @@ def get_hero_hand_players(
         FROM hand_players hp
         JOIN hands h ON h.id = hp.hand_id
         JOIN sessions s ON s.id = h.session_id
-        WHERE hp.player_id = :pid {date_clause} {currency_clause}
+        WHERE hp.player_id = :pid {date_clause} {end_date_clause} {currency_clause}
         ORDER BY h.timestamp ASC
     """
     params: dict[str, int | str] = {"pid": int(player_id)}
     if since_date:
         params["since"] = since_date
+    if end_date:
+        params["end_date"] = end_date
     return pd.read_sql_query(sql, conn, params=params)
 
 

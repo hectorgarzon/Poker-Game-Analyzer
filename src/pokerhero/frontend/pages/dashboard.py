@@ -543,10 +543,13 @@ def _render(
         win_rate_bb100,
     )
 
+    from datetime import date, timedelta
+    current_end_date = date.today().isoformat()
+
     conn = get_connection(db_path)
     try:
         hp_df = get_hero_hand_players(
-            conn, player_id, since_date=since_date, currency_type=currency_type
+            conn, player_id, since_date=since_date, end_date=current_end_date, currency_type=currency_type
         )
         sessions_df = get_sessions(
             conn, player_id, since_date=since_date, currency_type=currency_type
