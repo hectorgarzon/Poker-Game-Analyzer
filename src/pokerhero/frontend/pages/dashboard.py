@@ -11,6 +11,7 @@ from pokerhero.analysis.targets import (
     read_target_settings,
     traffic_light,
 )
+from pokerhero.analysis.traffic_colors_kpis import get_vpip_color
 from pokerhero.database.db import get_connection, get_setting, upsert_player
 
 dash.register_page(__name__, path="/dashboard", name="Overall Stats")  # type: ignore[no-untyped-call]
@@ -223,7 +224,7 @@ def _kpi_card(
             html.Div(
                 value,
                 style={
-                    "fontSize": font_size,  # Aplicación del estilo CSS
+                    "fontSize": font_size,
                     "fontWeight": "700",
                     "color": color,
                     "lineHeight": "1.2",
@@ -621,7 +622,7 @@ def _render(
                 children=[
                     _kpi_card("Total P&L", pnl_str, color=pnl_color),
                     _kpi_card("Win Rate", wr_str, color=wr_color),
-                    _kpi_card("VPIP", f"{vpip:.1f}%"),
+                    _kpi_card("VPIP", f"{vpip:.1f}%", color=get_vpip_color(vpip)),
                     _kpi_card("PFR", f"{pfr:.1f}%"),
                     _kpi_card("3-Bet", f"{three_bet:.1f}%"),
                     _kpi_card("LIMP", f"{limp:.1f}%"),
