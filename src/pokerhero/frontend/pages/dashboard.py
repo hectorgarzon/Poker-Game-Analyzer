@@ -11,7 +11,12 @@ from pokerhero.analysis.targets import (
     read_target_settings,
     traffic_light,
 )
-from pokerhero.analysis.traffic_colors_kpis import get_vpip_color
+from pokerhero.analysis.traffic_colors_kpis import (
+    get_3bet_color,
+    get_limp_color,
+    get_pfr_color,
+    get_vpip_color,
+)
 from pokerhero.database.db import get_connection, get_setting, upsert_player
 
 dash.register_page(__name__, path="/dashboard", name="Overall Stats")  # type: ignore[no-untyped-call]
@@ -630,9 +635,9 @@ def _render(
                 },
                 children=[
                     _kpi_card("VPIP", f"{vpip:.1f}%", color=get_vpip_color(vpip)),
-                    _kpi_card("PFR", f"{pfr:.1f}%"),
-                    _kpi_card("3-Bet", f"{three_bet:.1f}%"),
-                    _kpi_card("LIMP", f"{limp:.1f}%"),
+                    _kpi_card("PFR", f"{pfr:.1f}%", color=get_pfr_color(pfr)),
+                    _kpi_card("3-Bet", f"{three_bet:.1f}%", color=get_3bet_color(three_bet)),
+                    _kpi_card("LIMP", f"{limp:.1f}%", color=get_limp_color(limp)),
                 ],
             ),
         ],
