@@ -19,7 +19,7 @@ from pokerhero.analysis.traffic_colors_kpis import (
 )
 from pokerhero.database.db import get_connection, get_setting, upsert_player
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 dash.register_page(__name__, path="/dashboard", name="Overall Stats")  # type: ignore[no-untyped-call]
@@ -571,7 +571,10 @@ def _render(
         )
         # Previous period
         # Convert to datetime objects
-        since_date_dt = datetime.strptime(since_date, "%Y-%m-%d").date()
+        if since_date is None:
+            since_date_dt = datetime.strptime("2000-01-01", "%Y-%m-%d").date()
+        else:
+            since_date_dt = datetime.strptime(since_date, "%Y-%m-%d").date()
         current_end_date_dt = datetime.strptime(current_end_date, "%Y-%m-%d").date()
 
         # Calculate diff in days
