@@ -107,7 +107,7 @@ def get_sessions(
         LEFT JOIN hand_players hp ON hp.hand_id = h.id AND hp.player_id = :pid
         WHERE 1=1 {date_clause} {currency_clause}
         GROUP BY s.id
-        ORDER BY s.start_time ASC
+        ORDER BY s.start_time DESC
     """
     params: dict[str, int | str] = {"pid": int(player_id)}
     if since_date:

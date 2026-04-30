@@ -1390,10 +1390,13 @@ def _build_session_table(df: pd.DataFrame) -> Any:  # dash_table has no mypy stu
     rows = []
     for _, row in df.iterrows():
         pnl = float(row["net_profit"])
+        date_time = "-"
+        if row["start_time"]:
+            date_time = row["start_time"].replace("T", " ").split(":")[0] + ":" + row["start_time"].replace("T", " ").split(":")[1]
         rows.append(
             {
                 "id": int(row["id"]),
-                "date": str(row["start_time"])[:10] if row["start_time"] else "—",
+                "date": date_time,
                 "stakes": (
                     f"{_fmt_blind(row['small_blind'])}/{_fmt_blind(row['big_blind'])}"
                 ),
