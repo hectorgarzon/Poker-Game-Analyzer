@@ -107,7 +107,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
             {"name": "Benefit", "id": "total_bankroll"},
             {"name": "Days played", "id": "days_seen"},
             {"name": "Days since last time", "id": "days_since_last_played"},
-            {"name": "Max win when showdown", "id": "max_win_showdown"},
+            {"name": "Benefit when we went to showdown", "id": "max_win_showdown"},
             {"name": "Peak Hour", "id": "peak_hour"},
             {"name": "Days at Peak Hour", "id": "peak_hour_days"},
         ],
@@ -189,6 +189,20 @@ def _render_players(db_path: str) -> html.Div | str:
                 ],
                 style={"display": "flex", "alignItems": "center"}
             ),
+            html.Div(
+                [
+                    html.Span("Min Days Played:", style={"fontSize": "13px", "marginRight": "5px"}),
+                    dcc.Input(
+                        id="player-filter-min-days",
+                        type="number",
+                        placeholder="0",
+                        min=0,
+                        debounce=True,
+                        style={**_input_style, "width": "80px"},
+                    ),
+                ],
+                style={"display": "flex", "alignItems": "center", "marginTop": "8px"}
+            ),
         ],
         style={
             "display": "flex",
@@ -228,12 +242,14 @@ def _render(pathname: str) -> tuple[html.Div, html.Div | str]:
     Output("player-table", "data"),
     Input("player-filter-username", "value"),
     Input("player-filter-min-hands", "value"),
+    Input("player-filter-min-days", "value"),
     State("player-data-store", "data"),
     prevent_initial_call=True,
 )
 def _apply_player_filters(
     username: str | None,
     min_hands: int | None,
+    min_days: int | None,
     data: list[dict[str, Any]] | None,
 ) -> list[dict[str, Any]]:
     if not data:
@@ -245,5 +261,8 @@ def _apply_player_filters(
 
     if min_hands is not None:
         df = df[df["hands_played"] >= min_hands]
+
+    if min_days is not None:
+        df = df[df["days_seen"] >= min_days]
 
     return list(_build_player_table(df).data)
