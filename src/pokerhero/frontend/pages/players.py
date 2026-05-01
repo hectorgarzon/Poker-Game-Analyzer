@@ -127,6 +127,13 @@ def _build_player_table(df: pd.DataFrame) -> Any:
         row_selectable=False,
         cell_selectable=True,
         page_action="none",
+        style_cell_conditional=[
+            {
+                'if': {'column_id': 'username'},
+                'cursor': 'pointer',
+                'color': '#0074D9'
+            }
+        ],
     )
 
 def _render_players(db_path: str) -> html.Div | str:
@@ -291,3 +298,18 @@ def _apply_player_filters(
 def clear_filters(n_clicks: int) -> tuple[None, None, None]:
     """Limpia todos los filtros de la página de Players."""
     return None, None, None
+
+@callback(
+    Output("_pages_location", "href"),
+    Input("player-table", "active_cell"),
+    State("player-table", "data"),
+    prevent_initial_call=True,
+)
+def navigate_to_player_detail(active_cell, table_data):
+    """Captura el clic en la tabla y redirige a la página de detalle del jugador."""
+    if not active_cell:
+        raise dash.exceptions.PreventUpdate
+
+    # Obtiene el username de la fila pulsada
+    player_username = table_data[active_cell["row"]]["username"]
+    return f"/player/{player_username}"
