@@ -386,6 +386,7 @@ def get_hero_hand_players(
                 ) THEN 1
                 ELSE 0
             END AS limp,
+            s.small_blind,
             s.big_blind,
             CASE WHEN EXISTS (
                 SELECT 1 FROM actions a

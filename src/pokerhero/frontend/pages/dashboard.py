@@ -98,6 +98,30 @@ layout = html.Div(
                     labelStyle={"marginRight": "16px", "fontSize": "13px"},
                 ),
             ],
+            style={"marginBottom": "8px"},
+        ),
+        html.Div(
+            [
+                html.Span(
+                    "Stakes: ",
+                    style={
+                        "fontSize": "13px",
+                        "color": "var(--text-3, #555)",
+                        "marginRight": "8px",
+                    },
+                ),
+                dcc.Dropdown(
+                    id="dashboard-stakes",
+                    multi=True,
+                    placeholder="All stakes",
+                    style={
+                        "display": "inline-block",
+                        "width": "250px",
+                        "verticalAlign": "middle",
+                        "fontSize": "13px",
+                    },
+                ),
+            ],
             style={"marginBottom": "16px"},
         ),
         dcc.Loading(
@@ -556,27 +580,36 @@ def _build_highlights(
 # ---------------------------------------------------------------------------
 @callback(
     Output("dashboard-content", "children"),
+    Output("dashboard-stakes", "options"),
     Input("_pages_location", "pathname"),
     Input("dashboard-period", "value"),
     Input("dashboard-currency", "value"),
+    Input("dashboard-stakes", "value"),
     Input("theme-store", "data"),
     prevent_initial_call=False,
 )
 def _render(
-    pathname: str, period: str, currency: str, theme: str = "light"
-) -> html.Div | str:
+    pathname: str,
+    period: str,
+    currency: str,
+    selected_stakes: list[str] | None,
+    theme: str = "light",
+) -> tuple[html.Div | str, list[dict[str, str]]]:
     if pathname != "/dashboard":
         raise dash.exceptions.PreventUpdate
 
     db_path = _get_db_path()
     if db_path == ":memory:":
-        return html.Div("⚠️ No database connected.", style={"color": "orange"})
+        return html.Div("⚠️ No database connected.", style={"color": "orange"}), []
 
     player_id = _get_hero_player_id(db_path)
     if player_id is None:
-        return html.Div(
-            "⚠️ No hero username set. Please set it on the Upload page first.",
-            style={"color": "orange"},
+        return (
+            html.Div(
+                "⚠️ No hero username set. Please set it on the Upload page first.",
+                style={"color": "orange"},
+            ),
+            [],
         )
 
     since_date = _period_to_since_date(period)
@@ -641,8 +674,37 @@ def _render(
     finally:
         conn.close()
 
+    # Calculate stakes and populate options
+    for df in [hp_df, hp_df_prev, sessions_df]:
+        if not df.empty:
+            if 'small_blind' in df.columns and 'big_blind' in df.columns:
+                df["_stake"] = df.apply(
+                    lambda r: f"{_fmt_blind(r['small_blind'])}/{_fmt_blind(r['big_blind'])}",
+                    axis=1,
+                )
+            else:
+                df["_stake"] = "N/A"
+
+    all_stakes = sorted(
+        set(hp_df["_stake"].unique())
+        if not hp_df.empty and '_stake' in hp_df.columns
+        else set()
+    )
+    stake_options = [{"label": s, "value": s} for s in all_stakes]
+
+    if selected_stakes and '_stake' in hp_df.columns:
+        hp_df = hp_df[hp_df["_stake"].isin(selected_stakes)]
+        if '_stake' in hp_df_prev.columns:
+            hp_df_prev = hp_df_prev[hp_df_prev["_stake"].isin(selected_stakes)]
+        if '_stake' in sessions_df.columns:
+            sessions_df = sessions_df[sessions_df["_stake"].isin(selected_stakes)]
+        opp_df = opp_df[opp_df["hand_id"].isin(set(hp_df["hand_id"]))]
+
     if hp_df.empty:
-        return html.Div("No hands found. Upload a hand history file to get started.")
+        return (
+            html.Div("No hands found for the selected filters."),
+            stake_options,
+        )
 
     # --- Scalar KPIs ---
     pnl = total_profit(hp_df)
@@ -894,12 +956,15 @@ def _render(
     )
     """
 
-    return html.Div(
-        [
-            kpi_section,
-            # bankroll_section,
-            # _build_vpip_pfr_chart(vpip / 100, pfr / 100, theme=theme),
-            # positional_section,
-            _build_highlights(hp_df, sessions_df),
-        ]
+    return (
+        html.Div(
+            [
+                kpi_section,
+                # bankroll_section,
+                # _build_vpip_pfr_chart(vpip / 100, pfr / 100, theme=theme),
+                # positional_section,
+                _build_highlights(hp_df, sessions_df),
+            ]
+        ),
+        stake_options,
     )
