@@ -105,7 +105,12 @@ def get_sessions(
         FROM sessions s
         LEFT JOIN hands h  ON h.session_id = s.id
         LEFT JOIN hand_players hp ON hp.hand_id = h.id AND hp.player_id = :pid
-        WHERE 1=1 {date_clause} {currency_clause}
+        WHERE 1=1 {currency_clause}
+          AND EXISTS (
+              SELECT 1 FROM hands h3
+              WHERE h3.session_id = s.id
+              {date_clause.replace('s.start_time', 'h3.timestamp')}
+          )
         GROUP BY s.id
         ORDER BY s.start_time DESC
     """
@@ -354,7 +359,7 @@ def get_hero_hand_players(
         DataFrame with one row per hand hero participated in.
     """
     date_clause = "AND h.timestamp >= :since" if since_date else ""
-    end_date_clause = f"AND h.timestamp <= :end_date" if end_date else ""
+    end_date_clause = "AND h.timestamp < date(:end_date, '+1 day')" if end_date else ""
     if currency_type == "real":
         currency_clause = "AND s.currency IN ('USD', 'EUR')"
     elif currency_type == "play":
