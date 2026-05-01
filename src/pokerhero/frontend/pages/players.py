@@ -203,11 +203,25 @@ def _render_players(db_path: str) -> html.Div | str:
                 ],
                 style={"display": "flex", "alignItems": "center"}
             ),
+            html.Button(
+                "Limpiar filtros",
+                id="player-clear-filters",
+                style={
+                    **_input_style,
+                    "width": "auto",
+                    "backgroundColor": "#f8f9fa",
+                    "border": "1px solid #ced4da",
+                    "color": "#495057",
+                    "cursor": "pointer",
+                    "padding": "4px 12px",
+                    "marginLeft": "auto"  # Empuja el botón a la derecha
+                }
+            ),
         ],
         style={
             "display": "flex",
             "alignItems": "center",
-            "gap": "20px",  # Reducido de 40px a 20px para mejor alineación
+            "gap": "20px",
             "flexWrap": "wrap",
             "marginBottom": "12px",
             "padding": "8px 10px",
@@ -266,3 +280,14 @@ def _apply_player_filters(
         df = df[df["days_seen"] >= min_days]
 
     return list(_build_player_table(df).data)
+
+@callback(
+    Output("player-filter-username", "value"),
+    Output("player-filter-min-hands", "value"),
+    Output("player-filter-min-days", "value"),
+    Input("player-clear-filters", "n_clicks"),
+    prevent_initial_call=True,
+)
+def clear_filters(n_clicks: int) -> tuple[None, None, None]:
+    """Limpia todos los filtros de la página de Players."""
+    return None, None, None
