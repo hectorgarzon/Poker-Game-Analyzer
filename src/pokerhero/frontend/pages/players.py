@@ -191,7 +191,7 @@ def _render_players(db_path: str) -> html.Div | str:
             ),
             html.Div(
                 [
-                    html.Span("Min Days Played:", style={"fontSize": "13px", "marginRight": "5px"}),
+                    html.Span("Min Days:", style={"fontSize": "13px", "marginRight": "5px"}),
                     dcc.Input(
                         id="player-filter-min-days",
                         type="number",
@@ -201,13 +201,13 @@ def _render_players(db_path: str) -> html.Div | str:
                         style={**_input_style, "width": "80px"},
                     ),
                 ],
-                style={"display": "flex", "alignItems": "center", "marginTop": "8px"}
+                style={"display": "flex", "alignItems": "center"}
             ),
         ],
         style={
             "display": "flex",
             "alignItems": "center",
-            "gap": "40px",
+            "gap": "20px",  # Reducido de 40px a 20px para mejor alineación
             "flexWrap": "wrap",
             "marginBottom": "12px",
             "padding": "8px 10px",
