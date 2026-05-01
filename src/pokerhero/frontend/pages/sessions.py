@@ -1392,7 +1392,14 @@ def _build_session_table(df: pd.DataFrame) -> Any:
     hero_id = _get_hero_player_id(db_path)
     conn = get_connection(db_path)
 
-    _col_style = {"textAlign": "left", "padding": "8px 12px", "fontSize": "14px"}
+    _col_style = {
+        "textAlign": "left",
+        "padding": "8px 12px",
+        "fontSize": "14px",
+        "maxWidth": "80px",
+        "whiteSpace": "normal",
+        "wordBreak": "break-word"
+    }
     rows = []
     try:
         for _, row in df.iterrows():
@@ -1477,7 +1484,14 @@ def _build_session_table(df: pd.DataFrame) -> Any:
 
 def _build_hand_table(df: pd.DataFrame) -> Any:  # dash_table has no mypy stubs
     """Render a filtered hands DataFrame as a sortable DataTable."""
-    _col_style = {"textAlign": "left", "padding": "8px 12px", "fontSize": "14px"}
+    _col_style = {
+        "textAlign": "left",
+        "padding": "8px 12px",
+        "fontSize": "14px",
+        "maxWidth": "80px",
+        "whiteSpace": "normal",
+        "wordBreak": "break-word"
+    }
     rows = []
     for _, row in df.iterrows():
         pnl = float(row["net_result"]) if row["net_result"] is not None else 0.0
@@ -1510,6 +1524,9 @@ def _build_hand_table(df: pd.DataFrame) -> Any:  # dash_table has no mypy stubs
             "textAlign": "left",
         },
         style_cell=_col_style,
+        style_cell_conditional=[
+            {"if": {"column_id": "preflop_folds_showdown"}, "maxWidth": "40px"},
+        ],
         style_data_conditional=[
             {
                 "if": {"filter_query": "{_pnl_raw} >= 0", "column_id": "_pnl_raw"},
