@@ -1384,34 +1384,63 @@ def _filter_hands_data(
 # ---------------------------------------------------------------------------
 # Table builder helpers
 # ---------------------------------------------------------------------------
-def _build_session_table(df: pd.DataFrame) -> Any:  # dash_table has no mypy stubs
+def _build_session_table(df: pd.DataFrame) -> Any:
     """Render a filtered sessions DataFrame as a sortable DataTable."""
+    from pokerhero.analysis.queries import get_hands, get_session_showdown_hands
+
+    db_path = _get_db_path()
+    hero_id = _get_hero_player_id(db_path)
+    conn = get_connection(db_path)
+
     _col_style = {"textAlign": "left", "padding": "8px 12px", "fontSize": "14px"}
     rows = []
-    for _, row in df.iterrows():
-        pnl = float(row["net_profit"])
-        date_time = "-"
-        if row["start_time"]:
-            date_time = row["start_time"].replace("T", " ").split(":")[0] + ":" + row["start_time"].replace("T", " ").split(":")[1]
-        rows.append(
-            {
-                "id": int(row["id"]),
+    try:
+        for _, row in df.iterrows():
+            session_id = int(row["id"])
+            pnl = float(row["net_profit"]) if row["net_profit"] is not None else 0.0
+
+            # Cálculo del KPI solicitado
+            session_hands = get_hands(conn, session_id, hero_id)
+
+            # Buscamos manos en la sesión donde algún villano llegó al showdown
+            # aunque el héroe no lo hiciera.
+            query_any_showdown = """
+                SELECT DISTINCT hand_id
+                FROM hand_players
+                WHERE hand_id IN (SELECT id FROM hands WHERE session_id = ?)
+                  AND went_to_showdown = 1
+                  AND player_id != ?
+            """
+            any_showdown_ids = {r[0] for r in conn.execute(query_any_showdown, (session_id, hero_id)).fetchall()}
+
+            preflop_folds = session_hands[
+                (session_hands['saw_flop'] == 0) &
+                (session_hands['went_to_showdown'] == 0)
+            ]
+            count = len(preflop_folds[preflop_folds['id'].isin(any_showdown_ids)])
+
+            date_time = row["start_time"].replace("T", " ")[:16] if row["start_time"] else "-"
+
+            rows.append({
+                "id": session_id,
                 "date": date_time,
-                "stakes": (
-                    f"{_fmt_blind(row['small_blind'])}/{_fmt_blind(row['big_blind'])}"
-                ),
+                "stakes": f"{_fmt_blind(row['small_blind'])}/{_fmt_blind(row['big_blind'])}",
                 "hands": int(row["hands_played"]),
+                "preflop_folds_showdown": count,
                 "_pnl_raw": pnl,
                 "duration_minutes": int(row["duration_minutes"]) if pd.notna(row["duration_minutes"]) else 0,
                 "ev_status": str(row.get("ev_status", "📊 Calculate")),
-            }
-        )
+            })
+    finally:
+        conn.close()
+
     return dash_table.DataTable(
         id="session-table",
         columns=[
             {"name": "Date", "id": "date"},
             {"name": "Stakes", "id": "stakes"},
             {"name": "Hands", "id": "hands"},
+            {"name": "Preflop Folds w/ Showdown", "id": "preflop_folds_showdown"},
             {"name": "Duration (min)", "id": "duration_minutes"},
             {"name": "Net P&L", "id": "_pnl_raw", "type": "numeric", "format": {"specifier": ".1f"}},
             {"name": "EV Status", "id": "ev_status"},
@@ -1431,13 +1460,11 @@ def _build_session_table(df: pd.DataFrame) -> Any:  # dash_table has no mypy stu
         style_data_conditional=[
             {
                 "if": {"filter_query": "{_pnl_raw} >= 0", "column_id": "_pnl_raw"},
-                "color": "#2ecc71",
-                "fontWeight": "600",
+                "color": "#2ecc71", "fontWeight": "600",
             },
             {
                 "if": {"filter_query": "{_pnl_raw} < 0", "column_id": "_pnl_raw"},
-                "color": "#e74c3c",
-                "fontWeight": "600",
+                "color": "#e74c3c", "fontWeight": "600",
             },
             {"if": {"row_index": "odd"}, "backgroundColor": "var(--bg-2, #f9f9f9)"},
         ],
