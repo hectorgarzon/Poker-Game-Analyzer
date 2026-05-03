@@ -90,14 +90,13 @@ def _build_player_table(df: pd.DataFrame) -> Any:
     for _, row in df.iterrows():
         display_name = str(row["username"])
         if row.get("has_note"):
-            # Escapar comillas para no romper el atributo HTML title
-            note_content = str(row.get("note_text", "")).replace("'", "&apos;").replace('"', "&quot;")
-            display_name += f" <span style='color: green;' title='{note_content}'>✎</span>"
+            display_name += " <span style='color: green;'>✎</span>"
 
         rows.append(
             {
                 "id": int(row["id"]),
                 "username": display_name,
+                "note_text": str(row.get("note_text", "")),
                 "hands_played": int(row["hands_played"]),
                 "total_bankroll": round(float(row["total_bankroll"]), 1),
                 "days_seen": float(row["days_seen"]),
@@ -143,6 +142,18 @@ def _build_player_table(df: pd.DataFrame) -> Any:
             }
         ],
         markdown_options={"html": True},
+        tooltip_data=[
+            {
+                "username": {"value": r["note_text"], "type": "markdown"}
+            } if r["note_text"] else {}
+            for r in rows
+        ],
+        tooltip_delay=0,
+        tooltip_duration=None,
+        css=[{
+            "selector": ".dash-table-tooltip",
+            "rule": "font-size: 15px; max-width: 400px !important;"
+        }],
     )
 
 def _render_players(db_path: str) -> html.Div | str:
