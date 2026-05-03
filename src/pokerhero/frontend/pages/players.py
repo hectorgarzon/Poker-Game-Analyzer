@@ -104,10 +104,10 @@ def _build_player_table(df: pd.DataFrame) -> Any:
         columns=[
             {"name": "Username", "id": "username"},
             {"name": "Hands", "id": "hands_played"},
-            {"name": "Benefit", "id": "total_bankroll"},
+            {"name": "His benefit", "id": "total_bankroll"},
             {"name": "Days played", "id": "days_seen"},
             {"name": "Days since last time", "id": "days_since_last_played"},
-            {"name": "Benefit when we went to showdown", "id": "max_win_showdown"},
+            {"name": "His benefit when we went to showdown", "id": "max_win_showdown"},
             {"name": "Peak Hour", "id": "peak_hour"},
             {"name": "Days at Peak Hour", "id": "peak_hour_days"},
         ],
@@ -278,7 +278,11 @@ def _apply_player_filters(
     df = pd.DataFrame(data)
 
     if username:
-        df = df[df["username"].str.contains(username, case=False, na=False)]
+        # Divide el string por espacios y crea un patrón regex para buscar al inicio (^) con OR (|)
+        parts = username.split()
+        if parts:
+            pattern = "|".join([f"^{p}" for p in parts])
+            df = df[df["username"].str.contains(pattern, case=False, na=False)]
 
     if min_hands is not None:
         df = df[df["hands_played"] >= min_hands]
