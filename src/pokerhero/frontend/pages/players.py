@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import sqlite3
+import json
+from pathlib import Path
 from typing import Any, TypedDict
 from dash import Input, Output, State, callback, dash_table, dcc, html
 import dash
@@ -86,10 +88,14 @@ def _build_player_table(df: pd.DataFrame) -> Any:
     }
     rows = []
     for _, row in df.iterrows():
+        display_name = str(row["username"])
+        if row.get("has_note"):
+            display_name += " ✎"
+
         rows.append(
             {
                 "id": int(row["id"]),
-                "username": str(row["username"]),
+                "username": display_name,
                 "hands_played": int(row["hands_played"]),
                 "total_bankroll": round(float(row["total_bankroll"]), 1),
                 "days_seen": float(row["days_seen"]),
@@ -158,6 +164,18 @@ def _render_players(db_path: str) -> html.Div | str:
 
     if df.empty:
         return html.Div("No players found.")
+
+    # Cargar notas para marcar jugadores
+    notes_path = Path("player_notes.json")
+    notes_names = set()
+    if notes_path.exists():
+        try:
+            with open(notes_path, "r", encoding="utf-8") as f:
+                notes_data = json.load(f)
+                notes_names = {n["name"] for n in notes_data}
+        except Exception:
+            pass
+    df["has_note"] = df["username"].isin(notes_names)
 
     _input_style = {
         "border": "1px solid var(--border, #ddd)",
@@ -314,5 +332,5 @@ def navigate_to_player_detail(active_cell, table_data):
         raise dash.exceptions.PreventUpdate
 
     # Obtiene el username de la fila pulsada
-    player_username = table_data[active_cell["row"]]["username"]
+    player_username = table_data[active_cell["row"]]["username"].replace(" ✎", "")
     return f"/player/{player_username}"
