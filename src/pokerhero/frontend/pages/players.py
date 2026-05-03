@@ -136,7 +136,8 @@ def _build_player_table(df: pd.DataFrame) -> Any:
          style_cell_conditional=[
             {
                 'if': {'column_id': 'username'},
-                'cursor': 'pointer'
+                'cursor': 'pointer',
+                # 'fontWeight': 'bold'
             }
         ],
         markdown_options={"html": True},
