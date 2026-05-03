@@ -5,6 +5,11 @@ import dash
 
 register_page(__name__, path_template="/player/<player_id>")
 
+# Data we are showing here
+# Sessions the player played (so that we can see usual times and days. We can show the day of the week for each session)
+# Leaks of the player, or the type of player
+
+
 def layout(player_id: str = None, **kwargs):
     """Render the player detail page."""
     if player_id is None:
@@ -26,7 +31,7 @@ def layout(player_id: str = None, **kwargs):
             ),
             html.Hr(),
             html.Div(id="player-detail-content", children=[
-                html.Div(f"Nombre de usuario: {player_id}"),
+                html.Div(f"ID del jugador: {player_id}"),
                 # Aquí añadiremos más información más adelante
             ]),
         ],

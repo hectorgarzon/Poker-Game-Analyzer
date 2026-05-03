@@ -331,6 +331,6 @@ def navigate_to_player_detail(active_cell, table_data):
     if not active_cell:
         raise dash.exceptions.PreventUpdate
 
-    # Obtiene el username de la fila pulsada
-    player_username = table_data[active_cell["row"]]["username"].replace(" ✎", "")
-    return f"/player/{player_username}"
+    # Obtiene el id de la fila pulsada
+    player_id = table_data[active_cell["row"]]["id"]
+    return f"/player/{player_id}"
