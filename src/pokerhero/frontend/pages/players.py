@@ -90,7 +90,9 @@ def _build_player_table(df: pd.DataFrame) -> Any:
     for _, row in df.iterrows():
         display_name = str(row["username"])
         if row.get("has_note"):
-            display_name += " <span style='color: green;'>✎</span>"
+            # Escapar comillas para no romper el atributo HTML title
+            note_content = str(row.get("note_text", "")).replace("'", "&apos;").replace('"', "&quot;")
+            display_name += f" <span style='color: green;' title='{note_content}'>✎</span>"
 
         rows.append(
             {
@@ -168,15 +170,16 @@ def _render_players(db_path: str) -> html.Div | str:
 
     # Cargar notas para marcar jugadores
     notes_path = Path("player_notes.json")
-    notes_names = set()
+    notes_dict = {}
     if notes_path.exists():
         try:
              with open(notes_path, "r", encoding="utf-8") as f:
-                notes_data = json.load(f)
-                notes_names = set(notes_data.keys())
+                notes_dict = json.load(f)
         except Exception:
             pass
-    df["has_note"] = df["username"].isin(notes_names)
+    # Mapear el texto de la nota y marcar si existe
+    df["note_text"] = df["username"].map(lambda x: notes_dict.get(x, {}).get("notes", ""))
+    df["has_note"] = df["note_text"] != ""
 
     _input_style = {
         "border": "1px solid var(--border, #ddd)",
