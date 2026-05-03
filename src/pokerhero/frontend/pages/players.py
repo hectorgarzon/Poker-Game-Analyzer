@@ -90,7 +90,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
     for _, row in df.iterrows():
         display_name = str(row["username"])
         if row.get("has_note"):
-            display_name += " ✎"
+            display_name += " <span style='color: green;'>✎</span>"
 
         rows.append(
             {
@@ -108,7 +108,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
     return dash_table.DataTable(
         id="player-table",
         columns=[
-            {"name": "Username", "id": "username"},
+            {"name": "Username", "id": "username", "presentation": "markdown"},
             {"name": "Hands", "id": "hands_played"},
             {"name": "His benefit", "id": "total_bankroll"},
             {"name": "Days played", "id": "days_seen"},
@@ -133,13 +133,13 @@ def _build_player_table(df: pd.DataFrame) -> Any:
         row_selectable=False,
         cell_selectable=True,
         page_action="none",
-        style_cell_conditional=[
+         style_cell_conditional=[
             {
                 'if': {'column_id': 'username'},
-                'cursor': 'pointer',
-                'color': '#0074D9'
+                'cursor': 'pointer'
             }
         ],
+        markdown_options={"html": True},
     )
 
 def _render_players(db_path: str) -> html.Div | str:
