@@ -80,8 +80,8 @@ def _build_player_table(df: pd.DataFrame) -> Any:
     """Render a filtered players DataFrame as a sortable DataTable."""
     _col_style = {
         "textAlign": "left",
-        "padding": "8px 12px",
-        "fontSize": "14px",
+        "padding": "2px 5px",
+        "fontSize": "13px",
         "maxWidth": "80px",
         "whiteSpace": "normal",
         "wordBreak": "break-word"
