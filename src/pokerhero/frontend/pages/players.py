@@ -152,7 +152,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
         tooltip_duration=None,
         css=[{
             "selector": ".dash-table-tooltip",
-            "rule": "font-size: 15px; max-width: 400px !important;"
+            "rule": "font-size: 15px; max-width: 400px !important; background-color: #f0fff0;"
         }],
     )
 
