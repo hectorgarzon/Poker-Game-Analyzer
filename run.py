@@ -54,7 +54,7 @@ def load_player_notes():
             print(f"** copiando fichero {ruta_src} - {ruta_src.name}")
             shutil.copy2(ruta_src, ruta_src.name)
 
-    all_notes = []
+    all_notes = {}
 
     # Procesar notas de Poker Copilot
     copilot_file = Path("playerNotes.xml")
@@ -62,13 +62,14 @@ def load_player_notes():
         try:
             tree = ET.parse(copilot_file)
             for player in tree.findall(".//player"):
+                name = player.get("name", "")
                 note_node = player.find("note")
                 label_val = player.get("label", "")
-                all_notes.append({
-                    "name": player.get("name", ""),
-                    "note": note_node.text if note_node is not None and note_node.text else "",
+                note_text = note_node.text if note_node is not None and note_node.text else ""
+                all_notes[name] = {
+                    "notes": note_text,
                     "label": LABEL_MAPPING.get(label_val, label_val)
-                })
+                }
         except Exception as e:
             print(f"Error parseando {copilot_file}: {e}")
 
@@ -78,12 +79,22 @@ def load_player_notes():
         try:
             tree = ET.parse(ps_file)
             for note_el in tree.findall(".//note"):
+                name = note_el.get("player", "")
                 label_val = note_el.get("label", "")
-                all_notes.append({
-                    "name": note_el.get("player", ""),
-                    "note": note_el.text if note_el.text else "",
-                    "label": LABEL_MAPPING.get(label_val, label_val)
-                })
+                note_text = note_el.text if note_el.text else ""
+                label_mapped = LABEL_MAPPING.get(label_val, label_val)
+
+                if name in all_notes:
+                    if note_text:
+                        existing = all_notes[name]["notes"]
+                        all_notes[name]["notes"] = (existing + " " + note_text).strip()
+                    if label_mapped:
+                        all_notes[name]["label"] = label_mapped
+                else:
+                    all_notes[name] = {
+                        "notes": note_text,
+                        "label": label_mapped
+                    }
         except Exception as e:
             print(f"Error parseando {ps_file}: {e}")
 

@@ -171,9 +171,9 @@ def _render_players(db_path: str) -> html.Div | str:
     notes_names = set()
     if notes_path.exists():
         try:
-            with open(notes_path, "r", encoding="utf-8") as f:
+             with open(notes_path, "r", encoding="utf-8") as f:
                 notes_data = json.load(f)
-                notes_names = {n["name"] for n in notes_data}
+                notes_names = set(notes_data.keys())
         except Exception:
             pass
     df["has_note"] = df["username"].isin(notes_names)
