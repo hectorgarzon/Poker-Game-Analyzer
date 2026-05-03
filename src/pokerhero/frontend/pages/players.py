@@ -243,6 +243,16 @@ def _render_players(db_path: str) -> html.Div | str:
                 ],
                 style={"display": "flex", "alignItems": "center"}
             ),
+            html.Div(
+                [
+                    dcc.Checklist(
+                        id="player-filter-has-notes",
+                        options=[{"label": " Solo con notas", "value": "has_notes"}],
+                        style={"fontSize": "13px", "marginLeft": "5px"}
+                    ),
+                ],
+                style={"display": "flex", "alignItems": "center"}
+            ),
             html.Button(
                 "Limpiar filtros",
                 id="player-clear-filters",
@@ -254,7 +264,7 @@ def _render_players(db_path: str) -> html.Div | str:
                     "color": "#495057",
                     "cursor": "pointer",
                     "padding": "4px 12px",
-                    "marginLeft": "auto"  # Empuja el botón a la derecha
+                    "marginLeft": "auto"
                 }
             ),
         ],
@@ -298,6 +308,7 @@ def _render(pathname: str) -> tuple[html.Div, html.Div | str]:
     Input("player-filter-username", "value"),
     Input("player-filter-min-hands", "value"),
     Input("player-filter-min-days", "value"),
+    Input("player-filter-has-notes", "value"),
     State("player-data-store", "data"),
     prevent_initial_call=True,
 )
@@ -305,6 +316,7 @@ def _apply_player_filters(
     username: str | None,
     min_hands: int | None,
     min_days: int | None,
+    has_notes: list[str] | None,
     data: list[dict[str, Any]] | None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if not data:
@@ -323,7 +335,11 @@ def _apply_player_filters(
     if min_days is not None:
         df = df[df["days_seen"] >= min_days]
 
-    # Reconstruye la tabla COMPLETA (con tooltips)
+    # Filtro: solo jugadores con notas
+    if has_notes and "has_notes" in has_notes:
+        df = df[df["has_note"] == True]
+
+    # Reconstruye la tabla
     table = _build_player_table(df)
     return table.data, table.tooltip_data  # Devuelve datos + tooltips
 
@@ -331,10 +347,11 @@ def _apply_player_filters(
     Output("player-filter-username", "value"),
     Output("player-filter-min-hands", "value"),
     Output("player-filter-min-days", "value"),
+    Output("player-filter-has-notes", "value"),
     Input("player-clear-filters", "n_clicks"),
     prevent_initial_call=True,
 )
-def clear_filters(n_clicks: int) -> tuple[None, None, None]:
+def clear_filters(n_clicks: int) -> tuple[None, None, None, None]:
     """Limpia todos los filtros de la página de Players."""
     return None, None, None
 
