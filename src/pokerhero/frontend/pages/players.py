@@ -294,6 +294,7 @@ def _render(pathname: str) -> tuple[html.Div, html.Div | str]:
 
 @callback(
     Output("player-table", "data"),
+    Output("player-table", "tooltip_data"),
     Input("player-filter-username", "value"),
     Input("player-filter-min-hands", "value"),
     Input("player-filter-min-days", "value"),
@@ -305,7 +306,7 @@ def _apply_player_filters(
     min_hands: int | None,
     min_days: int | None,
     data: list[dict[str, Any]] | None,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if not data:
         raise dash.exceptions.PreventUpdate
     df = pd.DataFrame(data)
@@ -322,7 +323,9 @@ def _apply_player_filters(
     if min_days is not None:
         df = df[df["days_seen"] >= min_days]
 
-    return list(_build_player_table(df).data)
+    # Reconstruye la tabla COMPLETA (con tooltips)
+    table = _build_player_table(df)
+    return table.data, table.tooltip_data  # Devuelve datos + tooltips
 
 @callback(
     Output("player-filter-username", "value"),
