@@ -278,10 +278,9 @@ def _apply_player_filters(
     df = pd.DataFrame(data)
 
     if username:
-        # Divide el string por espacios y crea un patrón regex para buscar al inicio (^) con OR (|)
         parts = username.split()
         if parts:
-            pattern = "|".join([f"^{p}" for p in parts])
+            pattern = "|".join(parts)
             df = df[df["username"].str.contains(pattern, case=False, na=False)]
 
     if min_hands is not None:
