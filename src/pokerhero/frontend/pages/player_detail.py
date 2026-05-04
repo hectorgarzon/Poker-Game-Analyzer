@@ -7,6 +7,14 @@ from pokerhero.database.db import get_connection, get_setting, upsert_player
 
 register_page(__name__, path_template="/player/<player_id>")
 
+_SECTION_STYLE = {
+    "marginBottom": "32px",
+    "padding": "20px",
+    "border": "1px solid var(--border, #e0e0e0)",
+    "borderRadius": "8px",
+    "background": "var(--bg-2, #fafafa)",
+}
+
 # Data we are showing here
 # Sessions the player played (so that we can see usual times and days. We can show the day of the week for each session)
 # Leaks of the player, or the type of player
@@ -63,6 +71,30 @@ def layout(player_id: str = None, **kwargs):
             ),
             html.Hr(),
             html.Div(id="player-detail-content", children=[
+                 html.Div(
+                    style=_SECTION_STYLE,
+                    children=[
+                        html.Div(
+                            style={"fontSize": "16px", "fontWeight": "bold", "display": "flex", "gap": "40px"},
+                            children=[
+                                html.Div([
+                                    "His benefit: ",
+                                    html.Span(
+                                        f"{df_hands['net_result'].sum():.1f}",
+                                        style={"color": "green" if df_hands['net_result'].sum() >= 0 else "red"}
+                                    )
+                                ]),
+                                html.Div([
+                                    "Hero benefit: ",
+                                    html.Span(
+                                        f"{df_hands['hero_net_result'].sum():.1f}",
+                                        style={"color": "green" if df_hands['hero_net_result'].sum() >= 0 else "red"}
+                                    )
+                                ]),
+                            ]
+                        ),
+                    ]
+                ),
                 html.H4("Historial de Manos", style={"marginTop": "30px"}),
                 dcc.Checklist(
                     id="player-showdown-filter",
