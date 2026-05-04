@@ -8,7 +8,7 @@ from pokerhero.database.db import get_connection, get_setting, upsert_player
 register_page(__name__, path_template="/player/<player_id>")
 
 _SECTION_STYLE = {
-    "marginBottom": "32px",
+    "marginBottom": "16px",
     "padding": "20px",
     "border": "1px solid var(--border, #e0e0e0)",
     "borderRadius": "8px",
