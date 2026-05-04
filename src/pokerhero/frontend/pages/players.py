@@ -244,6 +244,20 @@ def _render_players(db_path: str) -> html.Div | str:
                 style={"display": "flex", "alignItems": "center"}
             ),
             html.Div(
+            [
+                html.Span("Max days since last time:", style={"fontSize": "13px", "marginRight": "5px"}),
+                dcc.Input(
+                    id="player-filter-max-days",
+                    type="number",
+                    placeholder="",
+                    min=0,
+                    debounce=True,
+                    style={**_input_style, "width": "80px"},
+                ),
+            ],
+            style={"display": "flex", "alignItems": "center"}
+            ),
+            html.Div(
                 [
                     dcc.Checklist(
                         id="player-filter-has-notes",
@@ -308,6 +322,7 @@ def _render(pathname: str) -> tuple[html.Div, html.Div | str]:
     Input("player-filter-username", "value"),
     Input("player-filter-min-hands", "value"),
     Input("player-filter-min-days", "value"),
+    Input("player-filter-max-days", "value"),  # Asegúrate que este Input esté
     Input("player-filter-has-notes", "value"),
     Input("player-table", "sort_by"),
     State("player-data-store", "data"),
@@ -317,14 +332,17 @@ def _apply_player_filters(
     username: str | None,
     min_hands: int | None,
     min_days: int | None,
+    max_days: int | None,  # Asegúrate que este parámetro esté
     has_notes: list[str] | None,
     sort_by: list[dict[str, str]] | None,
     data: list[dict[str, Any]] | None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if not data:
         raise dash.exceptions.PreventUpdate
+
     df = pd.DataFrame(data)
 
+    # Aplica filtros existentes
     if username:
         parts = username.split()
         if parts:
@@ -337,7 +355,10 @@ def _apply_player_filters(
     if min_days is not None:
         df = df[df["days_seen"] >= min_days]
 
-     # Filtro: solo jugadores con notas
+    # Filtro de max days
+    if max_days is not None:
+        df = df[df["days_since_last_played"] <= max_days+1]
+
     if has_notes and "has_notes" in has_notes:
         df = df[df["has_note"] == True]
 
@@ -350,22 +371,20 @@ def _apply_player_filters(
 
     # Reconstruye la tabla
     table = _build_player_table(df)
-
-    # Reconstruye la tabla
-    table = _build_player_table(df)
-    return table.data, table.tooltip_data  # Devuelve datos + tooltips
+    return table.data, table.tooltip_data
 
 @callback(
     Output("player-filter-username", "value"),
     Output("player-filter-min-hands", "value"),
     Output("player-filter-min-days", "value"),
+    Output("player-filter-max-days", "value"),
     Output("player-filter-has-notes", "value"),
     Input("player-clear-filters", "n_clicks"),
     prevent_initial_call=True,
 )
-def clear_filters(n_clicks: int) -> tuple[None, None, None, None]:
+def clear_filters(n_clicks: int) -> tuple[None, None, None, None, None]:
     """Limpia todos los filtros de la página de Players."""
-    return None, None, None, None
+    return None, None, None, None, None
 
 @callback(
     Output("_pages_location", "href"),
