@@ -51,6 +51,21 @@ def layout(player_id: str = None, **kwargs):
         WHERE hp.player_id = ?
     """
     df_hands = pd.read_sql_query(hands_query, conn, params=(hero_id, player_id))
+
+    # Obtener sesiones del jugador
+    sessions_query = """
+        SELECT
+            s.id,
+            s.start_time,
+            COUNT(h.id) AS hands_played,
+            ROUND(COALESCE(SUM(hp.net_result), 0), 2) AS net_profit
+        FROM sessions s
+        JOIN hands h ON h.session_id = s.id
+        JOIN hand_players hp ON hp.hand_id = h.id AND hp.player_id = ?
+        GROUP BY s.id
+        ORDER BY s.start_time DESC
+    """
+    df_sessions = pd.read_sql_query(sessions_query, conn, params=(player_id,))
     conn.close()
 
     username = row[0] if row else "Desconocido"
@@ -100,7 +115,59 @@ def layout(player_id: str = None, **kwargs):
                     children=[
                         html.Details([
                             html.Summary(
-                                "Historial de Manos",
+                                "Sessions",
+                                style={"fontSize": "18px", "fontWeight": "bold", "cursor": "pointer"}
+                            ),
+                            html.Div(
+                                style={"paddingTop": "20px"},
+                                children=[
+                                    dash_table.DataTable(
+                                        id="player-sessions-table",
+                                        columns=[
+                                            {"name": "Date", "id": "start_time"},
+                                            {"name": "Hands", "id": "hands_played"},
+                                            {"name": "Net profit", "id": "net_profit", "type": "numeric"},
+                                        ],
+                                        data=df_sessions.to_dict("records"),
+                                        sort_action="native",
+                                        page_action="native",
+                                        page_size=20,
+                                        style_header={
+                                            "backgroundColor": "#0074D9",
+                                            "color": "white",
+                                            "fontWeight": "bold",
+                                            "textAlign": "left",
+                                            "padding": "10px",
+                                        },
+                                        style_cell={
+                                            "textAlign": "left",
+                                            "padding": "10px",
+                                            "fontSize": "13px",
+                                        },
+                                        style_data_conditional=[
+                                            {
+                                                "if": {"filter_query": "{net_profit} >= 0", "column_id": "net_profit"},
+                                                "color": "green",
+                                                "fontWeight": "bold",
+                                            },
+                                            {
+                                                "if": {"filter_query": "{net_profit} < 0", "column_id": "net_profit"},
+                                                "color": "red",
+                                                "fontWeight": "bold",
+                                            },
+                                        ],
+                                    ),
+                                ]
+                            )
+                        ], open=False),
+                    ]
+                ),
+                html.Div(
+                    style=_SECTION_STYLE,
+                    children=[
+                        html.Details([
+                            html.Summary(
+                                "Hands",
                                 style={"fontSize": "18px", "fontWeight": "bold", "cursor": "pointer"}
                             ),
                             html.Div(
@@ -161,7 +228,7 @@ def layout(player_id: str = None, **kwargs):
                                     ),
                                 ]
                             )
-                        ], open=True),
+                        ], open=False),
                     ]
                 ),
             ]),
