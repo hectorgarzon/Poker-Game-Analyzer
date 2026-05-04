@@ -44,7 +44,25 @@ def layout(player_id: str = None, **kwargs):
             h.source_hand_id as hand_id,
             hp.net_result,
             COALESCE(hp_hero.net_result, 0) as hero_net_result,
-            CASE WHEN hp.went_to_showdown = 1 AND hp_hero.went_to_showdown = 1 THEN '✓' ELSE '' END as both_showdown
+            CASE WHEN hp.went_to_showdown = 1 AND hp_hero.went_to_showdown = 1 THEN '✓' ELSE '' END as both_showdown,
+            CASE WHEN EXISTS (
+                SELECT 1 FROM actions a
+                WHERE a.hand_id = h.id
+                AND a.player_id = hp.player_id
+                AND a.street = 'FLOP'
+            ) THEN 1 ELSE 0 END as saw_flop,
+            CASE WHEN EXISTS (
+                SELECT 1 FROM actions a
+                WHERE a.hand_id = h.id
+                AND a.player_id = hp.player_id
+                AND a.street = 'TURN'
+            ) THEN 1 ELSE 0 END as saw_turn,
+            CASE WHEN EXISTS (
+                SELECT 1 FROM actions a
+                WHERE a.hand_id = h.id
+                AND a.player_id = hp.player_id
+                AND a.street = 'RIVER'
+            ) THEN 1 ELSE 0 END as saw_river
         FROM hand_players hp
         JOIN hands h ON hp.hand_id = h.id
         LEFT JOIN hand_players hp_hero ON h.id = hp_hero.hand_id AND hp_hero.player_id = ?
@@ -52,6 +70,29 @@ def layout(player_id: str = None, **kwargs):
         ORDER BY h.timestamp DESC
     """
     df_hands = pd.read_sql_query(hands_query, conn, params=(hero_id, player_id))
+
+    # Obtener estadísticas adicionales
+    total_hands = len(df_hands)
+
+    # Obtener sesiones del jugador (mover aquí)
+    sessions_query = """
+        SELECT
+            s.id,
+            REPLACE(s.start_time, 'T', ' ') AS start_time,
+            COUNT(h.id) AS hands_played,
+            ROUND(COALESCE(SUM(hp.net_result), 0), 2) AS net_profit
+        FROM sessions s
+        JOIN hands h ON h.session_id = s.id
+        JOIN hand_players hp ON hp.hand_id = h.id AND hp.player_id = ?
+        GROUP BY s.id
+        ORDER BY s.start_time DESC
+    """
+    df_sessions = pd.read_sql_query(sessions_query, conn, params=(player_id,))
+
+    total_sessions = len(df_sessions)
+    saw_flop = df_hands['saw_flop'].sum()
+    saw_turn = df_hands['saw_turn'].sum()
+    saw_river = df_hands['saw_river'].sum()
 
     # Obtener sesiones del jugador
     sessions_query = """
@@ -90,8 +131,11 @@ def layout(player_id: str = None, **kwargs):
                  html.Div(
                     style=_SECTION_STYLE,
                     children=[
+                         html.Div(
+                    style={"fontSize": "16px", "fontWeight": "bold", "display": "flex", "flexDirection": "column", "gap": "8px"},
+                    children=[
                         html.Div(
-                            style={"fontSize": "16px", "fontWeight": "bold", "display": "flex", "gap": "40px"},
+                            style={"display": "flex", "gap": "40px"},
                             children=[
                                 html.Div([
                                     "His benefit: ",
@@ -107,8 +151,21 @@ def layout(player_id: str = None, **kwargs):
                                         style={"color": "green" if df_hands['hero_net_result'].sum() >= 0 else "red"}
                                     )
                                 ]),
+                                html.Div(f"# hands: {total_hands}"),
+                                html.Div(f"# sessions: {total_sessions}"),
                             ]
                         ),
+                        html.Div(
+                            style={"display": "flex", "gap": "40px", "fontSize": "14px"},
+                            children=[
+                                html.Div(f"No flop: {total_hands-saw_flop}"),
+                                html.Div(f"Finished in flop: {saw_flop-saw_turn}"),
+                                html.Div(f"Finished in turn: {saw_turn-saw_river}"),
+                                html.Div(f"Finished in river: {saw_river}"),
+                            ]
+                        ),
+                    ]
+                ),
                     ]
                 ),
                 html.Div(
