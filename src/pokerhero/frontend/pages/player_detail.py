@@ -49,6 +49,7 @@ def layout(player_id: str = None, **kwargs):
         JOIN hands h ON hp.hand_id = h.id
         LEFT JOIN hand_players hp_hero ON h.id = hp_hero.hand_id AND hp_hero.player_id = ?
         WHERE hp.player_id = ?
+        ORDER BY h.timestamp DESC
     """
     df_hands = pd.read_sql_query(hands_query, conn, params=(hero_id, player_id))
 
@@ -182,7 +183,7 @@ def layout(player_id: str = None, **kwargs):
                                     dash_table.DataTable(
                                         id="player-hands-table",
                                         columns=[
-                                            {"name": "ID Mano", "id": "hand_id"},
+                                            {"name": "Hand #", "id": "hand_id"},
                                             {"name": "Net Result", "id": "net_result", "type": "numeric"},
                                             {"name": "Hero Result", "id": "hero_net_result", "type": "numeric"},
                                             # {"name": "SD vs Hero", "id": "both_showdown"},
@@ -260,6 +261,7 @@ def _filter_player_hands(showdown_filter, player_id):
         JOIN hands h ON hp.hand_id = h.id
         LEFT JOIN hand_players hp_hero ON h.id = hp_hero.hand_id AND hp_hero.player_id = ?
         WHERE hp.player_id = ?
+        ORDER BY h.timestamp DESC
     """
     df = pd.read_sql_query(query, conn, params=(hero_id, player_id))
     conn.close()
