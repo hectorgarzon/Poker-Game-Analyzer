@@ -365,7 +365,7 @@ def _apply_player_filters(
 )
 def clear_filters(n_clicks: int) -> tuple[None, None, None, None]:
     """Limpia todos los filtros de la página de Players."""
-    return None, None, None
+    return None, None, None, None
 
 @callback(
     Output("_pages_location", "href"),
