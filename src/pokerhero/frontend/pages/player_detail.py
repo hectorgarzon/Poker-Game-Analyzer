@@ -1,6 +1,6 @@
 """Player detail page - shows information about a specific player."""
 
-from dash import html, dcc, register_page, dash_table
+from dash import html, dcc, register_page, dash_table, callback, Input, Output, State
 import dash
 import pandas as pd
 from pokerhero.database.db import get_connection, get_setting, upsert_player
@@ -35,7 +35,8 @@ def layout(player_id: str = None, **kwargs):
         SELECT
             h.source_hand_id as hand_id,
             hp.net_result,
-            COALESCE(hp_hero.net_result, 0) as hero_net_result
+            COALESCE(hp_hero.net_result, 0) as hero_net_result,
+            CASE WHEN hp.went_to_showdown = 1 AND hp_hero.went_to_showdown = 1 THEN '✓' ELSE '' END as both_showdown
         FROM hand_players hp
         JOIN hands h ON hp.hand_id = h.id
         LEFT JOIN hand_players hp_hero ON h.id = hp_hero.hand_id AND hp_hero.player_id = ?
@@ -63,12 +64,19 @@ def layout(player_id: str = None, **kwargs):
             html.Hr(),
             html.Div(id="player-detail-content", children=[
                 html.H4("Historial de Manos", style={"marginTop": "30px"}),
+                dcc.Checklist(
+                    id="player-showdown-filter",
+                    options=[{"label": " Solo manos con Showdown vs Hero", "value": "only_sd"}],
+                    style={"marginBottom": "10px", "fontSize": "14px"}
+                ),
+                dcc.Store(id="player-id-store", data=player_id),
                 dash_table.DataTable(
                     id="player-hands-table",
                     columns=[
                         {"name": "ID Mano", "id": "hand_id"},
                         {"name": "Net Result", "id": "net_result", "type": "numeric"},
                         {"name": "Hero Result", "id": "hero_net_result", "type": "numeric"},
+                        # {"name": "SD vs Hero", "id": "both_showdown"},
                     ],
                     data=df_hands.to_dict("records"),
                     sort_action="native",
@@ -112,3 +120,37 @@ def layout(player_id: str = None, **kwargs):
             ]),
         ],
     )
+
+@callback(
+    Output("player-hands-table", "data"),
+    Input("player-showdown-filter", "value"),
+    State("player-id-store", "data"),
+    prevent_initial_call=True
+)
+def _filter_player_hands(showdown_filter, player_id):
+    if player_id is None:
+        return []
+
+    db_path = _get_db_path()
+    conn = get_connection(db_path)
+    hero_username = get_setting(conn, "hero_username", default="")
+    hero_id = upsert_player(conn, hero_username) if hero_username else -1
+
+    query = """
+        SELECT
+            h.source_hand_id as hand_id,
+            hp.net_result,
+            COALESCE(hp_hero.net_result, 0) as hero_net_result,
+            CASE WHEN hp.went_to_showdown = 1 AND hp_hero.went_to_showdown = 1 THEN '✓' ELSE '' END as both_showdown
+        FROM hand_players hp
+        JOIN hands h ON hp.hand_id = h.id
+        LEFT JOIN hand_players hp_hero ON h.id = hp_hero.hand_id AND hp_hero.player_id = ?
+        WHERE hp.player_id = ?
+    """
+    df = pd.read_sql_query(query, conn, params=(hero_id, player_id))
+    conn.close()
+
+    if showdown_filter and "only_sd" in showdown_filter:
+        df = df[df["both_showdown"] == '✓']
+
+    return df.to_dict("records")
