@@ -119,7 +119,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
             {"name": "Days at Peak Hour", "id": "peak_hour_days"},
         ],
         data=rows,
-        sort_action="native",
+        sort_action="custom",
         style_table={"width": "100%", "overflowX": "auto"},
         style_header={
             "backgroundColor": "#0074D9",
@@ -309,6 +309,7 @@ def _render(pathname: str) -> tuple[html.Div, html.Div | str]:
     Input("player-filter-min-hands", "value"),
     Input("player-filter-min-days", "value"),
     Input("player-filter-has-notes", "value"),
+    Input("player-table", "sort_by"),
     State("player-data-store", "data"),
     prevent_initial_call=True,
 )
@@ -317,6 +318,7 @@ def _apply_player_filters(
     min_hands: int | None,
     min_days: int | None,
     has_notes: list[str] | None,
+    sort_by: list[dict[str, str]] | None,
     data: list[dict[str, Any]] | None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if not data:
@@ -335,9 +337,19 @@ def _apply_player_filters(
     if min_days is not None:
         df = df[df["days_seen"] >= min_days]
 
-    # Filtro: solo jugadores con notas
+     # Filtro: solo jugadores con notas
     if has_notes and "has_notes" in has_notes:
         df = df[df["has_note"] == True]
+
+    # Ordenación
+    if sort_by:
+        df = df.sort_values(
+            [col["column_id"] for col in sort_by],
+            ascending=[col["direction"] == "asc" for col in sort_by],
+        )
+
+    # Reconstruye la tabla
+    table = _build_player_table(df)
 
     # Reconstruye la tabla
     table = _build_player_table(df)
