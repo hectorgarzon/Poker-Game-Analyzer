@@ -95,70 +95,75 @@ def layout(player_id: str = None, **kwargs):
                         ),
                     ]
                 ),
-                html.Details([
-                    html.Summary(
-                        "Historial de Manos",
-                        style={"fontSize": "18px", "fontWeight": "bold", "cursor": "pointer", "marginTop": "30px"}
-                    ),
-                    html.Div(
-                        style={"paddingTop": "20px"},
-                        children=[
-                            dcc.Checklist(
-                                id="player-showdown-filter",
-                                options=[{"label": " Solo manos con Showdown vs Hero", "value": "only_sd"}],
-                                style={"marginBottom": "10px", "fontSize": "14px"}
+                html.Div(
+                    style=_SECTION_STYLE,
+                    children=[
+                        html.Details([
+                            html.Summary(
+                                "Historial de Manos",
+                                style={"fontSize": "18px", "fontWeight": "bold", "cursor": "pointer"}
                             ),
-                            dcc.Store(id="player-id-store", data=player_id),
-                            dash_table.DataTable(
-                                id="player-hands-table",
-                                columns=[
-                                    {"name": "ID Mano", "id": "hand_id"},
-                                    {"name": "Net Result", "id": "net_result", "type": "numeric"},
-                                    {"name": "Hero Result", "id": "hero_net_result", "type": "numeric"},
-                                    # {"name": "SD vs Hero", "id": "both_showdown"},
-                                ],
-                                data=df_hands.to_dict("records"),
-                                sort_action="native",
-                                page_action="native",
-                                page_size=100,
-                                style_header={
-                                    "backgroundColor": "#0074D9",
-                                    "color": "white",
-                                    "fontWeight": "bold",
-                                    "textAlign": "left",
-                                    "padding": "10px",
-                                },
-                                style_cell={
-                                    "textAlign": "left",
-                                    "padding": "10px",
-                                    "fontSize": "13px",
-                                },
-                                style_data_conditional=[
-                                    {
-                                        "if": {"filter_query": "{net_result} >= 0", "column_id": "net_result"},
-                                        "color": "green",
-                                        "fontWeight": "bold",
-                                    },
-                                    {
-                                        "if": {"filter_query": "{net_result} < 0", "column_id": "net_result"},
-                                        "color": "red",
-                                        "fontWeight": "bold",
-                                    },
-                                    {
-                                        "if": {"filter_query": "{hero_net_result} >= 0", "column_id": "hero_net_result"},
-                                        "color": "green",
-                                        "fontWeight": "bold",
-                                    },
-                                    {
-                                        "if": {"filter_query": "{hero_net_result} < 0", "column_id": "hero_net_result"},
-                                        "color": "red",
-                                        "fontWeight": "bold",
-                                    },
-                                ],
-                            ),
-                        ]
-                    )
-                ], open=True),
+                            html.Div(
+                                style={"paddingTop": "20px"},
+                                children=[
+                                    dcc.Checklist(
+                                        id="player-showdown-filter",
+                                        options=[{"label": " Solo manos con Showdown vs Hero", "value": "only_sd"}],
+                                        style={"marginBottom": "10px", "fontSize": "14px"}
+                                    ),
+                                    dcc.Store(id="player-id-store", data=player_id),
+                                    dash_table.DataTable(
+                                        id="player-hands-table",
+                                        columns=[
+                                            {"name": "ID Mano", "id": "hand_id"},
+                                            {"name": "Net Result", "id": "net_result", "type": "numeric"},
+                                            {"name": "Hero Result", "id": "hero_net_result", "type": "numeric"},
+                                            # {"name": "SD vs Hero", "id": "both_showdown"},
+                                        ],
+                                        data=df_hands.to_dict("records"),
+                                        sort_action="native",
+                                        page_action="native",
+                                        page_size=100,
+                                        style_header={
+                                            "backgroundColor": "#0074D9",
+                                            "color": "white",
+                                            "fontWeight": "bold",
+                                            "textAlign": "left",
+                                            "padding": "10px",
+                                        },
+                                        style_cell={
+                                            "textAlign": "left",
+                                            "padding": "10px",
+                                            "fontSize": "13px",
+                                        },
+                                        style_data_conditional=[
+                                            {
+                                                "if": {"filter_query": "{net_result} >= 0", "column_id": "net_result"},
+                                                "color": "green",
+                                                "fontWeight": "bold",
+                                            },
+                                            {
+                                                "if": {"filter_query": "{net_result} < 0", "column_id": "net_result"},
+                                                "color": "red",
+                                                "fontWeight": "bold",
+                                            },
+                                            {
+                                                "if": {"filter_query": "{hero_net_result} >= 0", "column_id": "hero_net_result"},
+                                                "color": "green",
+                                                "fontWeight": "bold",
+                                            },
+                                            {
+                                                "if": {"filter_query": "{hero_net_result} < 0", "column_id": "hero_net_result"},
+                                                "color": "red",
+                                                "fontWeight": "bold",
+                                            },
+                                        ],
+                                    ),
+                                ]
+                            )
+                        ], open=True),
+                    ]
+                ),
             ]),
         ],
     )
