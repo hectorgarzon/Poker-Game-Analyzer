@@ -9,6 +9,7 @@ from typing import Any, TypedDict
 from dash import Input, Output, State, callback, dash_table, dcc, html
 import dash
 import pandas as pd
+from pokerhero.analysis.stats import classify_player
 
 from pokerhero.database.db import get_connection, get_setting, upsert_player
 
@@ -105,11 +106,23 @@ def _build_player_table(df: pd.DataFrame) -> Any:
                 "days_since_last_played": int(row["days_since_last_played"]) if pd.notna(row["days_since_last_played"]) else 0,
                 "peak_hour": str(row["peak_hour"]) if pd.notna(row["peak_hour"]) else "",
                 "peak_hour_days": int(row["peak_hour_days"]) if pd.notna(row["peak_hour_days"]) else 0,
+                # Calcula VPIP y PFR (necesitarás estos datos en tu consulta)
+                "vpip_pct": float(row.get("vpip_pct", 0)),
+                "pfr_pct": float(row.get("pfr_pct", 0)),
+
+                # Calcula la etiqueta
+                "archetype": classify_player(
+                    float(row.get("vpip_pct", 0)),
+                    float(row.get("pfr_pct", 0)),
+                    int(row["hands_played"]),
+                    min_hands=15
+                )
             }
         )
     return dash_table.DataTable(
         id="player-table",
         columns=[
+            {"name": "Type", "id": "archetype"},
             {"name": "Username", "id": "username", "presentation": "markdown"},
             {"name": "Hands", "id": "hands_played"},
             {"name": "Stakes", "id": "stakes"},
