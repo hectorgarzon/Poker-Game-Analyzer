@@ -156,6 +156,24 @@ def _build_player_table(df: pd.DataFrame) -> Any:
                 # 'fontWeight': 'bold'
             }
         ],
+        style_data_conditional=[
+            {
+                "if": {"filter_query": "{archetype} = 'TAG'"},
+                "color": "#006400"
+            },
+            {
+                "if": {"filter_query": "{archetype} = 'LAG'"},
+                "color": "#8B0000"
+            },
+            {
+                "if": {"filter_query": "{archetype} = 'Fish'"},
+                "color": "#FF8C00"
+            },
+            {
+                "if": {"filter_query": "{archetype} = 'Nit'"},
+                "color": "#4682B4"
+            }
+        ],
         markdown_options={"html": True},
         tooltip_data=[
             {
