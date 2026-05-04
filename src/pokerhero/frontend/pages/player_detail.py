@@ -56,7 +56,7 @@ def layout(player_id: str = None, **kwargs):
     sessions_query = """
         SELECT
             s.id,
-            s.start_time,
+            REPLACE(s.start_time, 'T', ' ') AS start_time,
             COUNT(h.id) AS hands_played,
             ROUND(COALESCE(SUM(hp.net_result), 0), 2) AS net_profit
         FROM sessions s
