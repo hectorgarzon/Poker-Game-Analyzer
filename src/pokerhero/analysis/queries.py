@@ -45,10 +45,12 @@ def get_players(conn: sqlite3.Connection, hero_id: int) -> pd.DataFrame:
             GROUP BY strftime('%H', h2.timestamp)
             ORDER BY COUNT(*) DESC
             LIMIT 1
-        ) AS peak_hour_days
+        ) AS peak_hour_days,
+        GROUP_CONCAT(DISTINCT s.small_blind || '/' || s.big_blind) as stakes
     FROM players p
     LEFT JOIN hand_players hp ON p.id = hp.player_id
     LEFT JOIN hands h ON h.id = hp.hand_id
+    LEFT JOIN sessions s ON h.session_id = s.id
     LEFT JOIN hand_players hp_hero ON h.id = hp_hero.hand_id AND hp_hero.player_id = :hero_id
     WHERE p.id != :hero_id
     GROUP BY p.id, p.username

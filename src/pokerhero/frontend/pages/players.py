@@ -97,6 +97,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
                 "id": int(row["id"]),
                 "username": display_name,
                 "note_text": str(row.get("note_text", "")),
+                "stakes": str(row.get("stakes", "")),
                 "hands_played": int(row["hands_played"]),
                 "total_bankroll": round(float(row["total_bankroll"]), 1),
                 "days_seen": float(row["days_seen"]),
@@ -111,6 +112,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
         columns=[
             {"name": "Username", "id": "username", "presentation": "markdown"},
             {"name": "Hands", "id": "hands_played"},
+            {"name": "Stakes", "id": "stakes"},
             {"name": "His benefit", "id": "total_bankroll"},
             {"name": "Days played", "id": "days_seen"},
             {"name": "Days since last time", "id": "days_since_last_played"},
@@ -200,6 +202,12 @@ def _render_players(db_path: str) -> html.Div | str:
         "height": "30px",
     }
 
+    # Obtener opciones de stakes para el dropdown inicial
+    all_stakes = set()
+    for s_val in df["stakes"].dropna():
+        all_stakes.update([s.strip() for s in str(s_val).split(",")])
+    stakes_options = [{"label": s, "value": s} for s in sorted(all_stakes)]
+
     filter_bar = html.Div(
         [
             html.Div(
@@ -281,6 +289,19 @@ def _render_players(db_path: str) -> html.Div | str:
                     "marginLeft": "auto"
                 }
             ),
+            html.Div(
+                [
+                    html.Span("Stakes:", style={"fontSize": "13px", "marginRight": "5px"}),
+                    dcc.Dropdown(
+                        id="player-filter-stakes",
+                        options=stakes_options,
+                        multi=True,
+                        placeholder="Todos los stakes...",
+                        style={**_input_style, "width": "200px", "minWidth": "200px"}
+                    ),
+                ],
+                style={"display": "flex", "alignItems": "center"}
+            ),
         ],
         style={
             "display": "flex",
@@ -319,11 +340,13 @@ def _render(pathname: str) -> tuple[html.Div, html.Div | str]:
 @callback(
     Output("player-table", "data"),
     Output("player-table", "tooltip_data"),
+    Output("player-filter-stakes", "options"),
     Input("player-filter-username", "value"),
     Input("player-filter-min-hands", "value"),
     Input("player-filter-min-days", "value"),
-    Input("player-filter-max-days", "value"),  # Asegúrate que este Input esté
+    Input("player-filter-max-days", "value"),
     Input("player-filter-has-notes", "value"),
+    Input("player-filter-stakes", "value"),
     Input("player-table", "sort_by"),
     State("player-data-store", "data"),
     prevent_initial_call=True,
@@ -332,11 +355,12 @@ def _apply_player_filters(
     username: str | None,
     min_hands: int | None,
     min_days: int | None,
-    max_days: int | None,  # Asegúrate que este parámetro esté
+    max_days: int | None,
     has_notes: list[str] | None,
+    stakes_filter: list[str] | None,
     sort_by: list[dict[str, str]] | None,
     data: list[dict[str, Any]] | None,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, str]]]:
     if not data:
         raise dash.exceptions.PreventUpdate
 
@@ -355,12 +379,16 @@ def _apply_player_filters(
     if min_days is not None:
         df = df[df["days_seen"] >= min_days]
 
-    # Filtro de max days
     if max_days is not None:
-        df = df[df["days_since_last_played"] <= max_days+1]
+        df = df[df["days_since_last_played"] <= max_days]
 
     if has_notes and "has_notes" in has_notes:
         df = df[df["has_note"] == True]
+
+    # Filtro de stakes
+    if stakes_filter:
+        df["stakes_list"] = df["stakes"].str.split(", ")
+        df = df[df["stakes_list"].apply(lambda x: any(stake in x for stake in stakes_filter))]
 
     # Ordenación
     if sort_by:
@@ -369,9 +397,20 @@ def _apply_player_filters(
             ascending=[col["direction"] == "asc" for col in sort_by],
         )
 
+    # Obtener opciones de stakes para el dropdown
+    all_stakes = set()
+    for row in data:
+        if row.get("stakes"):
+            # Dividimos los stakes por comas y eliminamos espacios
+            stakes_list = [s.strip() for s in row["stakes"].split(",")]
+            all_stakes.update(stakes_list)
+
+    # Ordenamos y creamos las opciones
+    stakes_options = [{"label": stake, "value": stake} for stake in sorted(all_stakes)]
+
     # Reconstruye la tabla
     table = _build_player_table(df)
-    return table.data, table.tooltip_data
+    return table.data, table.tooltip_data, stakes_options
 
 @callback(
     Output("player-filter-username", "value"),
@@ -379,12 +418,13 @@ def _apply_player_filters(
     Output("player-filter-min-days", "value"),
     Output("player-filter-max-days", "value"),
     Output("player-filter-has-notes", "value"),
+    Output("player-filter-stakes", "value"),
     Input("player-clear-filters", "n_clicks"),
     prevent_initial_call=True,
 )
-def clear_filters(n_clicks: int) -> tuple[None, None, None, None, None]:
+def clear_filters(n_clicks: int) -> tuple[None, None, None, None, None, None]:
     """Limpia todos los filtros de la página de Players."""
-    return None, None, None, None, None
+    return None, None, None, None, None, None
 
 @callback(
     Output("_pages_location", "href"),
