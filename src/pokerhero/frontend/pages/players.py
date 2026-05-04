@@ -231,7 +231,7 @@ def _render_players(db_path: str) -> html.Div | str:
             ),
             html.Div(
                 [
-                    html.Span("Min Days:", style={"fontSize": "13px", "marginRight": "5px"}),
+                    html.Span("Min Days played:", style={"fontSize": "13px", "marginRight": "5px"}),
                     dcc.Input(
                         id="player-filter-min-days",
                         type="number",
