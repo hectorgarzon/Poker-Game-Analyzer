@@ -52,17 +52,31 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
     cumulative_df.index = cumulative_df.index + 1  # Empezar en mano 1
 
     # Preparar datos para Plotly Express
-    plot_df = cumulative_df.melt(ignore_index=False, var_name='Player', value_name='Stack')
+    plot_df = cumulative_df.melt(ignore_index=False, var_name='Jugador', value_name='Stack')
     plot_df.index.name = 'Mano'
     plot_df = plot_df.reset_index()
 
+    # Obtener lista de jugadores con héroe primero
+    players = plot_df['Jugador'].unique().tolist()
+    if hero_name and hero_name in players:
+        players.remove(hero_name)
+        players = [hero_name] + players
+
+    # Crear figura con orden correcto
     fig = px.line(
         plot_df,
         x='Mano',
         y='Stack',
-        color='Player',
-        title="Stack progress for each player (in bb)",
-        labels={'Mano': 'Hands', 'Stack': 'Stack diff'}
+        color='Jugador',
+        category_orders={'Jugador': players},  # Ordenar leyenda sin afectar datos
+        title="Evolución del Stack por Jugador",
+        labels={'Mano': 'Número de Manos', 'Stack': 'Incremento de Stack'},
+        custom_data=['Jugador', 'Stack']
+    )
+
+    # Personalizar hover
+    fig.update_traces(
+        hovertemplate="<b>%{customdata[0]}</b>: %{customdata[1]:.2f}<extra></extra>"
     )
 
     if hero_name:
