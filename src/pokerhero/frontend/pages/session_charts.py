@@ -1,6 +1,7 @@
 import dash
 import pandas as pd
 import plotly.express as px
+import numpy as np
 from dash import html, dcc
 from pokerhero.database.db import get_connection, get_setting
 
@@ -45,39 +46,47 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
     if df.empty:
         return html.Div("No hay datos suficientes para generar el gráfico.")
 
-    # Pivotar para tener manos como filas y jugadores como columnas,
-    # calcular el acumulado y resetear el índice para el eje X
+    # Procesamiento de datos
     pivot_df = df.pivot(index='hand_id', columns='username', values='net_result').fillna(0)
     cumulative_df = pivot_df.cumsum().reset_index(drop=True)
-    cumulative_df.index = cumulative_df.index + 1  # Empezar en mano 1
+    cumulative_df.index = cumulative_df.index + 1
 
-    # Preparar datos para Plotly Express
+    # Preparar datos para Plotly
     plot_df = cumulative_df.melt(ignore_index=False, var_name='Jugador', value_name='Stack')
     plot_df.index.name = 'Mano'
     plot_df = plot_df.reset_index()
 
-    # Obtener lista de jugadores con héroe primero
+    # Ordenar jugadores con héroe primero
     players = plot_df['Jugador'].unique().tolist()
     if hero_name and hero_name in players:
         players.remove(hero_name)
         players = [hero_name] + players
 
-    # Crear figura con orden correcto
+    # Crear figura
     fig = px.line(
         plot_df,
         x='Mano',
         y='Stack',
         color='Jugador',
-        category_orders={'Jugador': players},  # Ordenar leyenda sin afectar datos
+        category_orders={'Jugador': players},
         title="Evolución del Stack por Jugador",
-        labels={'Mano': 'Número de Manos', 'Stack': 'Incremento de Stack'},
-        custom_data=['Jugador', 'Stack']
+        labels={'Mano': 'Número de Manos', 'Stack': 'Incremento de Stack'}
     )
 
-    # Personalizar hover
-    fig.update_traces(
-        hovertemplate="<b>%{customdata[0]}</b>: %{customdata[1]:.2f}<extra></extra>"
-    )
+    # Añadir colores al hover
+    colors = plot_df['Stack'].apply(lambda x: '#28a745' if x >= 0 else '#dc3545')
+    for trace in fig.data:
+        mask = plot_df['Jugador'] == trace.name
+        trace.customdata = np.column_stack([
+            plot_df[mask]['Jugador'],
+            plot_df[mask]['Stack'],
+            colors[mask]
+        ])
+        trace.hovertemplate = (
+            "<span style='color:%{customdata[2]}'>" +
+            "<b>%{customdata[0]}</b>: %{customdata[1]:.2f}" +
+            "</span><extra></extra>"
+        )
 
     if hero_name:
         fig.update_traces(line=dict(width=4), selector=dict(name=hero_name))
