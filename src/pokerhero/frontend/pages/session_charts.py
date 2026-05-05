@@ -2,7 +2,7 @@ import dash
 import pandas as pd
 import plotly.express as px
 from dash import html, dcc
-from pokerhero.database.db import get_connection
+from pokerhero.database.db import get_connection, get_setting
 
 dash.register_page(__name__, path="/session-charts")
 
@@ -29,6 +29,7 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
     db_path = _get_db_path()
     conn = get_connection(db_path)
     try:
+        hero_name = get_setting(conn, "hero_username", default="")
         query = """
             SELECT h.id as hand_id, p.username, hp.net_result
             FROM hands h
@@ -63,6 +64,9 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
         title="Stack progress for each player (in bb)",
         labels={'Mano': 'Hands', 'Stack': 'Stack diff'}
     )
+
+    if hero_name:
+        fig.update_traces(line=dict(width=4), selector=dict(name=hero_name))
 
     fig.update_layout(
         legend=dict(orientation="h", y=-0.2, xanchor="center", x=0.5),
