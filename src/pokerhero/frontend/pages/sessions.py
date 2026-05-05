@@ -2239,20 +2239,39 @@ def _render_session_report(db_path: str, session_id: int) -> tuple[html.Div | st
                 unlucky_threshold=unlucky_threshold,
             ),
             _build_calculate_ev_section(),
-            html.Button(
-                f"Browse all {n_hands} hands",
-                id="session-report-browse-btn",
-                n_clicks=0,
-                style={
-                    "marginTop": "16px",
-                    "padding": "8px 20px",
-                    "background": "#0074D9",
-                    "color": "white",
-                    "border": "none",
-                    "borderRadius": "4px",
-                    "cursor": "pointer",
-                    "fontSize": "14px",
-                },
+            html.Div(
+                [
+                    html.Button(
+                        f"Browse all {n_hands} hands",
+                        id="session-report-browse-btn",
+                        n_clicks=0,
+                        style={
+                            "padding": "8px 20px",
+                            "background": "#0074D9",
+                            "color": "white",
+                            "border": "none",
+                            "borderRadius": "4px",
+                            "cursor": "pointer",
+                            "fontSize": "14px",
+                        },
+                    ),
+                    dcc.Link(
+                        html.Button(
+                            "📈 View Session Graphs",
+                            style={
+                                "padding": "8px 20px",
+                                "background": "#28a745",
+                                "color": "white",
+                                "border": "none",
+                                "borderRadius": "4px",
+                                "cursor": "pointer",
+                                "fontSize": "14px",
+                            },
+                        ),
+                        href=f"/session-charts?session_id={session_id}",
+                    ),
+                ],
+                style={"display": "flex", "gap": "12px", "marginTop": "16px"},
             ),
         ],
         style={"maxWidth": "900px"},
