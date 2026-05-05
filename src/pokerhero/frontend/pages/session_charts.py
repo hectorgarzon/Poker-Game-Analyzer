@@ -85,14 +85,46 @@ def _render_breadcrumb(session_id: int):
         html.Span("Charts", style={"fontSize": "14px", "color": "#333", "fontWeight": "600"})
     ], style={"marginBottom": "12px"})
 
+def _get_neighbor_sessions(session_id: int) -> tuple[int | None, int | None]:
+    """Obtiene los IDs de la sesión anterior y siguiente."""
+    db_path = _get_db_path()
+    conn = get_connection(db_path)
+    try:
+        prev_id = conn.execute(
+            "SELECT id FROM sessions WHERE id < ? ORDER BY id DESC LIMIT 1", (session_id,)
+        ).fetchone()
+        next_id = conn.execute(
+            "SELECT id FROM sessions WHERE id > ? ORDER BY id ASC LIMIT 1", (session_id,)
+        ).fetchone()
+        return (prev_id[0] if prev_id else None, next_id[0] if next_id else None)
+    finally:
+        conn.close()
+
 def layout(session_id: str | None = None, **kwargs: object) -> html.Div:
     s_id = int(session_id) if session_id else None
+    prev_id, next_id = _get_neighbor_sessions(s_id) if s_id else (None, None)
+
+    btn_style = {"padding": "6px 12px", "cursor": "pointer"}
 
     return html.Div(
         style={"fontFamily": "sans-serif", "maxWidth": "1000px", "margin": "40px auto", "padding": "0 20px"},
         children=[
             html.H2("📈 Gráficos de la Sesión"),
-            _render_breadcrumb(s_id) if s_id else dcc.Link("← Volver", href="/sessions"),
+            # Contenedor flex para alinear texto y botones
+            html.Div([
+                html.Div(_render_breadcrumb(s_id) if s_id else dcc.Link("← Volver", href="/sessions"),
+                         style={"marginBottom": "0"}),
+                html.Div([
+                    dcc.Link(
+                        html.Button("← Sesión Anterior", disabled=prev_id is None, style=btn_style),
+                        href=f"/session-charts?session_id={prev_id}" if prev_id else "#"
+                    ),
+                    dcc.Link(
+                        html.Button("Siguiente Sesión →", disabled=next_id is None, style=btn_style),
+                        href=f"/session-charts?session_id={next_id}" if next_id else "#"
+                    ),
+                ], style={"display": "flex", "gap": "10px"}),
+            ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "12px"}),
             html.Hr(style={"marginTop": "0"}),
             _build_session_chart(s_id) if s_id else html.Div("No se ha especificado ninguna sesión.")
         ]
