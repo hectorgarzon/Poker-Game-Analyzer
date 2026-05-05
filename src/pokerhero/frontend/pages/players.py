@@ -228,7 +228,7 @@ def _render_players(db_path: str) -> html.Div | str:
     _input_style = {
         "border": "1px solid var(--border, #ddd)",
         "borderRadius": "4px",
-        "padding": "4px 8px",
+        "padding": "4px 4px",
         "fontSize": "13px",
         "height": "30px",
     }
@@ -263,7 +263,7 @@ def _render_players(db_path: str) -> html.Div | str:
                         placeholder="0",
                         min=0,
                         debounce=True,
-                        style={**_input_style, "width": "80px"},
+                        style={**_input_style, "width": "40px"},
                     ),
                 ],
                 style={"display": "flex", "alignItems": "center"}
@@ -277,7 +277,7 @@ def _render_players(db_path: str) -> html.Div | str:
                         placeholder="0",
                         min=0,
                         debounce=True,
-                        style={**_input_style, "width": "80px"},
+                        style={**_input_style, "width": "40px"},
                     ),
                 ],
                 style={"display": "flex", "alignItems": "center"}
@@ -291,7 +291,7 @@ def _render_players(db_path: str) -> html.Div | str:
                     placeholder="",
                     min=0,
                     debounce=True,
-                    style={**_input_style, "width": "80px"},
+                    style={**_input_style, "width": "40px"},
                 ),
             ],
             style={"display": "flex", "alignItems": "center"}
