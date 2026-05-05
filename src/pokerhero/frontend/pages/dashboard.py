@@ -28,6 +28,7 @@ _PERIOD_OPTIONS = [
     {"label": "Today", "value": "today"},
     {"label": "Yesterday and today", "value": "2d"},
     {"label": "7 days", "value": "7d"},
+    {"label": "14 days", "value": "14d"},
     {"label": "1 month", "value": "1m"},
     {"label": "1 year", "value": "1y"},
     {"label": "All time", "value": "all"},
@@ -194,6 +195,8 @@ def _period_to_since_date(period: str) -> str | None:
         return (today - timedelta(days=1)).isoformat()
     if period == "7d":
         return (today - timedelta(days=7)).isoformat()
+    if period == "14d":
+        return (today - timedelta(days=14)).isoformat()
     if period == "1m":
         return (today - timedelta(days=30)).isoformat()
     if period == "1y":
