@@ -153,7 +153,7 @@ def _build_showdown_section(
 
     # Construir el título con la calle y el board
     street_color = _STREET_COLOURS.get(street, "#a855f7")
-    title = f"Showdown en {street}"
+    title = f"Showdown"
     if board_parts:
         title += f" - Board: {_format_cards_text(' '.join(board_parts))}"
 
@@ -522,12 +522,12 @@ def _build_villain_section(
     villain_rows: list[_VillainRow],
     opp_stats: pd.DataFrame
 ) -> Component | None:
-    """Construye la sección de oponentes (villains) con sus stats."""
+    """Construye la sección de oponentes (villains) con sus stats en línea horizontal."""
     if not villain_rows:
         return None
 
-    # Crear tabla de villains
-    villain_cards = []
+    # Crear contenedor flexible para villains
+    villain_elements = []
     for villain in villain_rows:
         username = villain["username"]
         position = villain.get("position", "")
@@ -535,78 +535,73 @@ def _build_villain_section(
 
         # Buscar stats del villain
         stats = opp_stats[opp_stats['username'] == username]
+        stats_info = []
         if not stats.empty:
             s = stats.iloc[0]
             hands_played = int(s["hands_played"])
             vpip = int(s["vpip_count"]) / hands_played * 100 if hands_played > 0 else 0
             pfr = int(s["pfr_count"]) / hands_played * 100 if hands_played > 0 else 0
+            stats_info = [f"VPIP: {vpip:.1f}%", f"PFR: {pfr:.1f}%"]
 
             # Clasificar arquetipo
             from pokerhero.analysis.stats import classify_player
             archetype = classify_player(vpip, pfr, hands_played, min_hands=15)
 
-            # Crear badge de arquetipo
-            archetype_badge = []
             if archetype:
                 arch_label, arch_extras = _archetype_badge_attrs(archetype, hands_played)
-                archetype_badge = [
-                    html.Span(
-                        arch_label,
-                        style={
-                            "background": _ARCHETYPE_COLORS.get(archetype, "#999"),
-                            "color": "#fff",
-                            "borderRadius": "4px",
-                            "padding": "1px 6px",
-                            "fontSize": "11px",
-                            "fontWeight": "700",
-                            "marginLeft": "5px",
-                            **arch_extras,
-                        },
-                    )
-                ]
-
-            villain_cards.append(
-                html.Div(
-                    [
-                        html.Span(
-                            f"{username} ({position}): ",
-                            style={
-                                "fontWeight": "600",
-                                "fontSize": "13px",
-                                "marginRight": "6px",
-                            },
-                        ),
-                        _render_cards(hole_cards) if hole_cards else html.Span("—"),
-                        *archetype_badge,
-                        html.Div(
-                            [
-                                html.Span(f"VPIP: {vpip:.1f}%", style={"fontSize": "11px"}),
-                                html.Span(" | ", style={"fontSize": "11px"}),
-                                html.Span(f"PFR: {pfr:.1f}%", style={"fontSize": "11px"}),
-                            ],
-                            style={"marginTop": "4px", "color": "var(--text-3, #555)"},
-                        ),
-                    ],
-                    style={"marginBottom": "12px", "paddingBottom": "8px", "borderBottom": "1px solid #eee"},
+                archetype_badge = html.Span(
+                    arch_label,
+                    style={
+                        "background": _ARCHETYPE_COLORS.get(archetype, "#999"),
+                        "color": "#fff",
+                        "borderRadius": "4px",
+                        "padding": "1px 6px",
+                        "fontSize": "11px",
+                        "fontWeight": "700",
+                        "marginLeft": "5px",
+                        **arch_extras,
+                    },
                 )
-            )
+            else:
+                archetype_badge = None
         else:
-            villain_cards.append(
-                html.Div(
-                    [
-                        html.Span(
-                            f"{username} ({position}): ",
-                            style={
-                                "fontWeight": "600",
-                                "fontSize": "13px",
-                                "marginRight": "6px",
-                            },
-                        ),
-                        _render_cards(hole_cards) if hole_cards else html.Span("—"),
-                    ],
-                    style={"marginBottom": "12px", "paddingBottom": "8px", "borderBottom": "1px solid #eee"},
-                )
+            archetype_badge = None
+
+        # Crear elemento de villain
+        villain_elements.append(
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Span(
+                                f"{username} ({position}): ",
+                                style={
+                                    "fontWeight": "600",
+                                    "fontSize": "13px",
+                                    "marginRight": "6px",
+                                },
+                            ),
+                            _render_cards(hole_cards) if hole_cards else html.Span("—"),
+                            archetype_badge if archetype_badge else None,
+                        ],
+                        style={"display": "flex", "alignItems": "center", "marginBottom": "4px"}
+                    ),
+                    html.Div(
+                        [
+                            html.Span(stat, style={"fontSize": "11px", "marginRight": "6px"})
+                            for stat in stats_info
+                        ],
+                        style={"display": "flex", "color": "var(--text-3, #555)"}
+                    )
+                ],
+                style={
+                    "marginRight": "20px",
+                    "paddingBottom": "8px",
+                    "borderBottom": "1px solid #eee",
+                    "minWidth": "180px"
+                }
             )
+        )
 
     return html.Div(
         [
@@ -619,7 +614,14 @@ def _build_villain_section(
                     "marginBottom": "12px",
                 },
             ),
-            *villain_cards,
+            html.Div(
+                villain_elements,
+                style={
+                    "display": "flex",
+                    "flexWrap": "wrap",
+                    "gap": "10px"
+                }
+            )
         ],
         style={"marginBottom": "20px"}
     )
