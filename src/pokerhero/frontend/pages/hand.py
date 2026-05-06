@@ -437,8 +437,9 @@ def _render_hand_view(
         dcc.Store(id="hand-fav-id-store", data=hand_id),
     ]
 
-    # Sección de Villains (oponentes) - ahora incluye al Hero
-    villain_section = _build_villain_section(hand_details.get("villains", []), opp_stats)
+     # Sección de Villains (oponentes) - ahora incluye al Hero
+    hero_username = hand_details.get("hero_username", "enygma9999")  # Obtener el nombre de usuario del Hero
+    villain_section = _build_villain_section(hand_details.get("villains", []), opp_stats, hero_username)
     if villain_section:
         header_children.append(villain_section)
 
@@ -500,7 +501,8 @@ def _render_hand_view(
 
 def _build_villain_section(
     villain_rows: list[_VillainRow],
-    opp_stats: pd.DataFrame
+    opp_stats: pd.DataFrame,
+    hero_username: str = "enygma9999"  # Nombre de usuario del Hero que queremos reemplazar
 ) -> Component | None:
     """Construye la sección de oponentes (villains) con sus stats en línea horizontal."""
     if not villain_rows:
@@ -510,6 +512,9 @@ def _build_villain_section(
     villain_elements = []
     for villain in villain_rows:
         username = villain["username"]
+        # Reemplazar el nombre de usuario del Hero con "Hero"
+        display_name = "Hero" if username == hero_username else username
+
         position = villain.get("position", "")
         hole_cards = villain.get("hole_cards", "")
 
@@ -554,7 +559,7 @@ def _build_villain_section(
                     html.Div(
                         [
                             html.Span(
-                                f"{username} ({position}): ",
+                                f"{display_name} ({position}): " if position else f"{display_name}: ",
                                 style={
                                     "fontWeight": "600",
                                     "fontSize": "13px",
