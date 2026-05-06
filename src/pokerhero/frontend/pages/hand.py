@@ -437,27 +437,7 @@ def _render_hand_view(
         dcc.Store(id="hand-fav-id-store", data=hand_id),
     ]
 
-    # Sección de Hero
-    if hero_cards:
-        header_children.append(
-            html.Div(
-                [
-                    html.Span(
-                        f"{hero_name}: ",
-                        style={
-                            "fontWeight": "600",
-                            "fontSize": "13px",
-                            "marginRight": "6px",
-                            "color": "var(--text-3, #555)",
-                        },
-                    ),
-                    _render_cards(hero_cards),
-                ],
-                style={"marginBottom": "8px"},
-            )
-        )
-
-    # Sección de Villains (oponentes)
+    # Sección de Villains (oponentes) - ahora incluye al Hero
     villain_section = _build_villain_section(hand_details.get("villains", []), opp_stats)
     if villain_section:
         header_children.append(villain_section)
