@@ -110,13 +110,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
                 "vpip_pct": float(row.get("vpip_pct", 0)),
                 "pfr_pct": float(row.get("pfr_pct", 0)),
 
-                # Calcula la etiqueta
-                "archetype": classify_player(
-                    float(row.get("vpip_pct", 0)),
-                    float(row.get("pfr_pct", 0)),
-                    int(row["hands_played"]),
-                    min_hands=15
-                )
+                "archetype": row["archetype"]
             }
         )
     return dash_table.DataTable(
@@ -225,6 +219,15 @@ def _render_players(db_path: str) -> html.Div | str:
     df["note_text"] = df["username"].map(lambda x: notes_dict.get(x, {}).get("notes", ""))
     df["has_note"] = df["note_text"] != ""
 
+    # Calcular arquetipo aquí para que esté disponible en el Store y filtros
+    df["archetype"] = df.apply(
+        lambda r: classify_player(
+            float(r.get("vpip_pct", 0)),
+            float(r.get("pfr_pct", 0)),
+            int(r["hands_played"]),
+            min_hands=15
+        ), axis=1
+    )
     _input_style = {
         "border": "1px solid var(--border, #ddd)",
         "borderRadius": "4px",
@@ -306,19 +309,24 @@ def _render_players(db_path: str) -> html.Div | str:
                 ],
                 style={"display": "flex", "alignItems": "center"}
             ),
-            html.Button(
-                "Limpiar filtros",
-                id="player-clear-filters",
-                style={
-                    **_input_style,
-                    "width": "auto",
-                    "backgroundColor": "#f8f9fa",
-                    "border": "1px solid #ced4da",
-                    "color": "#495057",
-                    "cursor": "pointer",
-                    "padding": "4px 12px",
-                    "marginLeft": "auto"
-                }
+            html.Div(
+            [
+                html.Span("Type:", style={"fontSize": "13px", "marginRight": "5px"}),
+                dcc.Dropdown(
+                    id="player-filter-type",
+                    options=[
+                        {"label": "All", "value": "all"},
+                        {"label": "TAG", "value": "TAG"},
+                        {"label": "LAG", "value": "LAG"},
+                        {"label": "Fish", "value": "Fish"},
+                        {"label": "Nit", "value": "Nit"},
+                    ],
+                    placeholder="All types...",
+                    clearable=True,
+                    style={**_input_style, "width": "120px"},
+                ),
+            ],
+            style={"display": "flex", "alignItems": "center"}
             ),
             html.Div(
                 [
@@ -332,6 +340,20 @@ def _render_players(db_path: str) -> html.Div | str:
                     ),
                 ],
                 style={"display": "flex", "alignItems": "center"}
+            ),            
+            html.Button(
+                "Limpiar filtros",
+                id="player-clear-filters",
+                style={
+                    **_input_style,
+                    "width": "auto",
+                    "backgroundColor": "#f8f9fa",
+                    "border": "1px solid #ced4da",
+                    "color": "#495057",
+                    "cursor": "pointer",
+                    "padding": "4px 12px",
+                    "marginLeft": "auto"
+                }
             ),
         ],
         style={
@@ -378,6 +400,7 @@ def _render(pathname: str) -> tuple[html.Div, html.Div | str]:
     Input("player-filter-max-days", "value"),
     Input("player-filter-has-notes", "value"),
     Input("player-filter-stakes", "value"),
+    Input("player-filter-type", "value"), 
     Input("player-table", "sort_by"),
     State("player-data-store", "data"),
     prevent_initial_call=True,
@@ -389,6 +412,7 @@ def _apply_player_filters(
     max_days: int | None,
     has_notes: list[str] | None,
     stakes_filter: list[str] | None,
+    type_filter: str | None,
     sort_by: list[dict[str, str]] | None,
     data: list[dict[str, Any]] | None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, str]]]:
@@ -420,7 +444,11 @@ def _apply_player_filters(
     if stakes_filter:
         df["stakes_list"] = df["stakes"].str.split(", ")
         df = df[df["stakes_list"].apply(lambda x: any(stake in x for stake in stakes_filter))]
-
+    
+    # Filtro de tipo (archetype)
+    if type_filter and type_filter != "all":
+        df = df[df["archetype"] == type_filter]
+    
     # Ordenación
     if sort_by:
         df = df.sort_values(
@@ -450,12 +478,13 @@ def _apply_player_filters(
     Output("player-filter-max-days", "value"),
     Output("player-filter-has-notes", "value"),
     Output("player-filter-stakes", "value"),
+    Output("player-filter-type", "value"),
     Input("player-clear-filters", "n_clicks"),
     prevent_initial_call=True,
 )
-def clear_filters(n_clicks: int) -> tuple[None, None, None, None, None, None]:
+def clear_filters(n_clicks: int) -> tuple[None, None, None, None, None, None, None]:
     """Limpia todos los filtros de la página de Players."""
-    return None, None, None, None, None, None
+    return None, None, None, None, None, None, None
 
 @callback(
     Output("_pages_location", "href"),
