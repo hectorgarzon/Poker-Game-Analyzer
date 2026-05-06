@@ -10,6 +10,79 @@ import sqlite3
 
 import pandas as pd
 
+def get_hand_details(conn: sqlite3.Connection, hand_id: int) -> dict | None:
+    """Obtiene los detalles completos de una mano."""
+    cursor = conn.cursor()
+
+    # Obtener información básica de la mano
+    cursor.execute("""
+        SELECT h.source_hand_id, h.board_flop, h.board_turn, h.board_river,
+               h.is_favorite, h.session_id
+        FROM hands h
+        WHERE h.id = ?
+    """, (hand_id,))
+    hand_row = cursor.fetchone()
+
+    if not hand_row:
+        return None
+
+    # Obtener cartas del héroe
+    hero_row = cursor.execute("""
+        SELECT hp.hole_cards, hp.net_result, p.username, p.id
+        FROM hand_players hp
+        JOIN players p ON hp.player_id = p.id
+        WHERE hp.hand_id = ? AND p.username = (
+            SELECT value FROM settings WHERE key = 'hero_username'
+        )
+    """, (hand_id,)).fetchone()
+
+    # Si no hay héroe configurado, tomar el primer jugador como héroe
+    if not hero_row:
+        hero_row = cursor.execute("""
+            SELECT hp.hole_cards, hp.net_result, p.username, p.id
+            FROM hand_players hp
+            JOIN players p ON hp.player_id = p.id
+            WHERE hp.hand_id = ?
+            LIMIT 1
+        """, (hand_id,)).fetchone()
+
+    # Obtener villanos en showdown
+    villain_rows = cursor.execute("""
+        SELECT p.username, hp.position, hp.hole_cards, hp.net_result
+        FROM hand_players hp
+        JOIN players p ON hp.player_id = p.id
+        WHERE hp.hand_id = ? AND hp.hole_cards IS NOT NULL
+        AND (p.username != ? OR ? IS NULL)
+    """, (hand_id, hero_row[2] if hero_row else None, hero_row[2] if hero_row else None)).fetchall()
+
+    # Obtener stats de oponentes en la sesión
+    opp_stats = {}
+    if hand_row[5] and hero_row:  # session_id y hero_row existen
+        session_id = hand_row[5]
+        hero_id = hero_row[3]  # Ahora obtenemos el ID del jugador
+        opp_stats = get_session_player_stats(conn, session_id, hero_id)
+
+    return {
+        "source_hand_id": hand_row[0],
+        "board_flop": hand_row[1],
+        "board_turn": hand_row[2],
+        "board_river": hand_row[3],
+        "is_favorite": bool(hand_row[4]),
+        "session_id": hand_row[5],
+        "hero_cards": hero_row[0] if hero_row else None,
+        "hero_net_result": float(hero_row[1]) if hero_row and hero_row[1] else None,
+        "hero_name": hero_row[2] if hero_row else "Hero",
+        "villain_showdown": [
+            {
+                "username": row[0],
+                "position": row[1] or "",
+                "hole_cards": row[2],
+                "net_result": float(row[3]) if row[3] else None
+            }
+            for row in villain_rows
+        ],
+        "opp_stats": opp_stats
+    }
 
 def get_players(conn: sqlite3.Connection, hero_id: int) -> pd.DataFrame:
     """Get all players with basic stats including showdown performance vs hero."""
@@ -655,21 +728,7 @@ def get_session_player_stats(
     session_id: int,
     hero_id: int,
 ) -> pd.DataFrame:
-    """Return per-opponent aggregated stats for a single session.
-
-    Columns: username, hands_played, vpip_count, pfr_count.
-
-    Only players other than the hero are returned. Used to characterise
-    opponents (TAG / LAG / Nit / Fish) on the sessions page.
-
-    Args:
-        conn: Open SQLite connection.
-        session_id: Internal integer id of the session row.
-        hero_id: Internal integer id of the hero player row (excluded from results).
-
-    Returns:
-        DataFrame with one row per opponent, ordered by hands_played descending.
-    """
+    """Return per-opponent aggregated stats for a single session."""
     sql = """
         SELECT
             p.username,
@@ -682,11 +741,8 @@ def get_session_player_stats(
         WHERE h.session_id = :sid
           AND hp.player_id != :hero
         GROUP BY hp.player_id
-        ORDER BY hands_played DESC
     """
-    return pd.read_sql_query(
-        sql, conn, params={"sid": int(session_id), "hero": int(hero_id)}
-    )
+    return pd.read_sql_query(sql, conn, params={"sid": int(session_id), "hero": int(hero_id)})
 
 
 def get_session_hero_ev_actions(
