@@ -56,6 +56,9 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
     plot_df = cumulative_df.melt(ignore_index=False, var_name='Jugador', value_name='Stack')
     pivot_pos.index = cumulative_df.index
     plot_df['Posicion'] = pivot_pos.melt(ignore_index=False)['value']
+    # Extraer el resultado neto de la mano actual
+    pivot_df.index = cumulative_df.index
+    plot_df['Delta'] = pivot_df.melt(ignore_index=False)['value']
     plot_df = plot_df.dropna(subset=['Posicion'])
     plot_df.index.name = 'Mano'
     plot_df = plot_df.reset_index()
@@ -78,18 +81,22 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
     )
 
     # Añadir colores al hover
-    colors = plot_df['Stack'].apply(lambda x: '#28a745' if x >= 0 else '#dc3545')
+    colors = plot_df['Delta'].apply(
+        lambda x: '#28a745' if x > 0
+        else ('#dc3545' if x < 0 else '#808080')
+    )
     for trace in fig.data:
         mask = plot_df['Jugador'] == trace.name
         trace.customdata = np.column_stack([
             plot_df[mask]['Jugador'],
             plot_df[mask]['Stack'],
             colors[mask],
-            plot_df[mask]['Posicion']
+            plot_df[mask]['Posicion'],
+            plot_df[mask]['Delta']
         ])
         trace.hovertemplate = (
             "<span style='color:%{customdata[2]}'>" +
-            "(%{customdata[3]}) <b>%{customdata[0]}</b>: %{customdata[1]:.2f}" +
+            "(%{customdata[3]}) <b>%{customdata[0]}</b>: %{customdata[1]:.2f} (%{customdata[4]:+.2f})" +
             "</span><extra></extra>"
         )
 
