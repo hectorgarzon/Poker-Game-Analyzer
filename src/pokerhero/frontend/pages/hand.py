@@ -408,7 +408,7 @@ def _render_hand_view(
         )
 
     # Sección de Villains (oponentes)
-    villain_section = _build_villain_section(hand_details.get("villain_showdown", []), opp_stats)
+    villain_section = _build_villain_section(hand_details.get("villains", []), opp_stats)
     if villain_section:
         header_children.append(villain_section)
 

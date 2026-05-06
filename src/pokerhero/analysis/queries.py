@@ -26,6 +26,25 @@ def get_hand_details(conn: sqlite3.Connection, hand_id: int) -> dict | None:
     if not hand_row:
         return None
 
+    players = conn.execute("""
+        SELECT p.username, hp.position, hp.hole_cards, hp.net_result
+        FROM hand_players hp
+        JOIN players p ON hp.player_id = p.id
+        WHERE hand_id = ?
+        AND username != 'Hero'
+    """, (hand_id,)).fetchall()
+
+    # Convertir a lista de diccionarios (para compatibilidad con el frontend)
+    villains = [
+        {
+            "username": row[0],
+            "position": row[1],
+            "hole_cards": row[2],
+            "net_result": row[3]
+        }
+        for row in players
+    ]
+
     # Obtener cartas del héroe
     hero_row = cursor.execute("""
         SELECT hp.hole_cards, hp.net_result, p.username, p.id
@@ -72,6 +91,7 @@ def get_hand_details(conn: sqlite3.Connection, hand_id: int) -> dict | None:
         "hero_cards": hero_row[0] if hero_row else None,
         "hero_net_result": float(hero_row[1]) if hero_row and hero_row[1] else None,
         "hero_name": hero_row[2] if hero_row else "Hero",
+        "villains": villains,
         "villain_showdown": [
             {
                 "username": row[0],
