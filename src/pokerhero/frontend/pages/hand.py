@@ -343,10 +343,11 @@ def _render_hand_view(
     turn = hand_details.get("board_turn", "")
     river = hand_details.get("board_river", "")
     hero_cards = hand_details.get("hero_cards", "")
-    hero_name = hand_details.get("hero_name", "Hero")
+    hero_name = "Hero"  # Siempre mostrar "Hero"
     hero_net_result = hand_details.get("hero_net_result")
     hand_is_fav = hand_details.get("is_favorite", False)
     session_id = hand_details.get("session_id", 0)
+    opp_stats = hand_details.get("opp_stats", pd.DataFrame())
 
     # Sección de información básica
     header_children = [
@@ -386,6 +387,7 @@ def _render_hand_view(
         dcc.Store(id="hand-fav-id-store", data=hand_id),
     ]
 
+    # Sección de Hero
     if hero_cards:
         header_children.append(
             html.Div(
@@ -404,6 +406,11 @@ def _render_hand_view(
                 style={"marginBottom": "8px"},
             )
         )
+
+    # Sección de Villains (oponentes)
+    villain_section = _build_villain_section(hand_details.get("villain_showdown", []), opp_stats)
+    if villain_section:
+        header_children.append(villain_section)
 
     # Board
     _sep = html.Span(
@@ -451,7 +458,7 @@ def _render_hand_view(
         hero_name=hero_name,
         hero_cards=hero_cards,
         board=board_str,
-        opp_stats=hand_details.get("opp_stats"),
+        opp_stats=opp_stats,
         hero_net_result=hero_net_result,
     )
 
@@ -459,6 +466,113 @@ def _render_hand_view(
         sections.append(showdown_div)
 
     return html.Div([*header_children, board_div, *sections])
+
+
+def _build_villain_section(
+    villain_rows: list[_VillainRow],
+    opp_stats: pd.DataFrame
+) -> Component | None:
+    """Construye la sección de oponentes (villains) con sus stats."""
+    if not villain_rows:
+        return None
+
+    # Crear tabla de villains
+    villain_cards = []
+    for villain in villain_rows:
+        username = villain["username"]
+        position = villain.get("position", "")
+        hole_cards = villain.get("hole_cards", "")
+
+        # Buscar stats del villain
+        stats = opp_stats[opp_stats['username'] == username]
+        if not stats.empty:
+            s = stats.iloc[0]
+            hands_played = int(s["hands_played"])
+            vpip = int(s["vpip_count"]) / hands_played * 100 if hands_played > 0 else 0
+            pfr = int(s["pfr_count"]) / hands_played * 100 if hands_played > 0 else 0
+
+            # Clasificar arquetipo
+            from pokerhero.analysis.stats import classify_player
+            archetype = classify_player(vpip, pfr, hands_played, min_hands=15)
+
+            # Crear badge de arquetipo
+            archetype_badge = []
+            if archetype:
+                arch_label, arch_extras = _archetype_badge_attrs(archetype, hands_played)
+                archetype_badge = [
+                    html.Span(
+                        arch_label,
+                        style={
+                            "background": _ARCHETYPE_COLORS.get(archetype, "#999"),
+                            "color": "#fff",
+                            "borderRadius": "4px",
+                            "padding": "1px 6px",
+                            "fontSize": "11px",
+                            "fontWeight": "700",
+                            "marginLeft": "5px",
+                            **arch_extras,
+                        },
+                    )
+                ]
+
+            villain_cards.append(
+                html.Div(
+                    [
+                        html.Span(
+                            f"{username} ({position}): ",
+                            style={
+                                "fontWeight": "600",
+                                "fontSize": "13px",
+                                "marginRight": "6px",
+                            },
+                        ),
+                        _render_cards(hole_cards) if hole_cards else html.Span("—"),
+                        *archetype_badge,
+                        html.Div(
+                            [
+                                html.Span(f"VPIP: {vpip:.1f}%", style={"fontSize": "11px"}),
+                                html.Span(" | ", style={"fontSize": "11px"}),
+                                html.Span(f"PFR: {pfr:.1f}%", style={"fontSize": "11px"}),
+                            ],
+                            style={"marginTop": "4px", "color": "var(--text-3, #555)"},
+                        ),
+                    ],
+                    style={"marginBottom": "12px", "paddingBottom": "8px", "borderBottom": "1px solid #eee"},
+                )
+            )
+        else:
+            villain_cards.append(
+                html.Div(
+                    [
+                        html.Span(
+                            f"{username} ({position}): ",
+                            style={
+                                "fontWeight": "600",
+                                "fontSize": "13px",
+                                "marginRight": "6px",
+                            },
+                        ),
+                        _render_cards(hole_cards) if hole_cards else html.Span("—"),
+                    ],
+                    style={"marginBottom": "12px", "paddingBottom": "8px", "borderBottom": "1px solid #eee"},
+                )
+            )
+
+    return html.Div(
+        [
+            html.H5(
+                "Villains",
+                style={
+                    "color": "#e67e22",
+                    "borderBottom": "2px solid #e67e22",
+                    "paddingBottom": "4px",
+                    "marginBottom": "12px",
+                },
+            ),
+            *villain_cards,
+        ],
+        style={"marginBottom": "20px"}
+    )
 
 def _build_action_sections(
     df: pd.DataFrame,
