@@ -133,15 +133,31 @@ def _build_showdown_section(
     hero_name: str | None = None,
     hero_cards: str | None = None,
     board: str = "",
-    opp_stats: pd.DataFrame | None = None,  # Ahora acepta DataFrame
+    opp_stats: pd.DataFrame | None = None,
     min_hands: int = 15,
     hero_net_result: float | None = None,
 ) -> html.Div | None:
-    """Build a Showdown section showing all players' cards."""
+    """Construye una sección de Showdown mostrando las cartas de todos los jugadores y el board."""
     if not villain_rows:
         return None
 
-    # Build the full list of players at showdown
+    # Determinar la calle del showdown (basado en el board)
+    board_parts = [p for p in board.split() if p]
+    street = "PREFLOP"
+    if len(board_parts) == 3:
+        street = "FLOP"
+    elif len(board_parts) == 4:
+        street = "TURN"
+    elif len(board_parts) >= 5:
+        street = "RIVER"
+
+    # Construir el título con la calle y el board
+    street_color = _STREET_COLOURS.get(street, "#a855f7")
+    title = f"Showdown en {street}"
+    if board_parts:
+        title += f" - Board: {_format_cards_text(' '.join(board_parts))}"
+
+    # Construir la lista de jugadores
     players: list[tuple[str, str]] = []
     label_to_username: dict[str, str] = {}
     label_to_result: dict[str, float] = {}
@@ -160,26 +176,61 @@ def _build_showdown_section(
         if v.get("net_result") is not None:
             label_to_result[label] = float(v["net_result"])
 
-    # Render one row per player
+    # Evaluar las mejores manos de cada jugador
+    import itertools
+    import re
+    from pokerkit import Card, StandardHighHand
+
+    board_card_list = [c for c in board.split() if c]
+    descriptions: dict[str, str | None] = {}
+    winner_labels: set[str] = set()
+
+    if len(board_card_list) >= 3:
+        best_hands: dict[str, object] = {}
+        for label, hole in players:
+            try:
+                all_cards = list(Card.parse(hole.replace(" ", ""))) + list(
+                    Card.parse("".join(board_card_list))
+                )
+                best = max(
+                    StandardHighHand(list(combo)) for combo in itertools.combinations(all_cards, 5)
+                )
+                best_hands[label] = best
+                descriptions[label] = re.sub(r"\s*\(.*\)", "", str(best))
+            except Exception:
+                best_hands[label] = None
+                descriptions[label] = None
+
+        # Determinar el ganador
+        valid = {lb: h for lb, h in best_hands.items() if h is not None}
+        if valid:
+            top = max(valid.values())
+            winner_labels = {lb for lb, h in valid.items() if h == top}
+
+    # Renderizar las filas de jugadores
     rows: list[html.Div] = []
     for label, hole in players:
+        result = label_to_result.get(label, None)
+        result_str = f" ({_fmt_pnl(result)})" if result is not None else ""
+        desc = descriptions.get(label)
+        trophy = "🏆 " if label in winner_labels else ""
+
         # Archetype badge
         archetype_badge: list[Component] = []
         username = label_to_username.get(label)
-
         if opp_stats is not None and username:
-            # Buscar stats para este usuario en el DataFrame
-            user_stats = opp_stats[opp_stats['username'] == username]
-            if not user_stats.empty:
-                from pokerhero.analysis.stats import classify_player
+            stats = opp_stats[opp_stats['username'] == username]
+            if not stats.empty:
+                s = stats.iloc[0]
+                hands_played = int(s["hands_played"])
+                vpip = int(s["vpip_count"]) / hands_played * 100 if hands_played > 0 else 0
+                pfr = int(s["pfr_count"]) / hands_played * 100 if hands_played > 0 else 0
 
-                s = user_stats.iloc[0]
-                h = int(s["hands_played"])
-                vp = int(s["vpip_count"]) / h * 100 if h > 0 else 0.0
-                pf = int(s["pfr_count"]) / h * 100 if h > 0 else 0.0
-                archetype = classify_player(vp, pf, h, min_hands=min_hands)
-                if archetype is not None:
-                    arch_label, arch_extras = _archetype_badge_attrs(archetype, h)
+                from pokerhero.analysis.stats import classify_player
+                archetype = classify_player(vpip, pfr, hands_played, min_hands=min_hands)
+
+                if archetype:
+                    arch_label, arch_extras = _archetype_badge_attrs(archetype, hands_played)
                     archetype_badge = [
                         html.Span(
                             arch_label,
@@ -191,7 +242,6 @@ def _build_showdown_section(
                                 "fontSize": "11px",
                                 "fontWeight": "700",
                                 "marginLeft": "5px",
-                                "verticalAlign": "middle",
                                 **arch_extras,
                             },
                         )
@@ -201,11 +251,12 @@ def _build_showdown_section(
             html.Div(
                 [
                     html.Span(
-                        f"{label}: ",
+                        f"{trophy}{label}: ",
                         style={
                             "fontWeight": "600",
                             "fontSize": "13px",
                             "marginRight": "6px",
+                            "color": "#f5a623" if trophy else "var(--text-3, #555)",
                         },
                     ),
                     *archetype_badge,
@@ -213,34 +264,33 @@ def _build_showdown_section(
                     *(
                         [
                             html.Span(
-                                f"({_fmt_pnl(label_to_result[label])})",
+                                f"  — {desc}",
                                 style={
                                     "fontSize": "12px",
-                                    "fontWeight": "600",
-                                    "marginLeft": "8px",
-                                    "color": (
-                                        "#28a745"
-                                        if label_to_result[label] >= 0
-                                        else "#dc3545"
-                                    ),
+                                    "color": "var(--text-4, #888)",
+                                    "marginLeft": "6px",
                                 },
                             )
                         ]
-                        if label in label_to_result
+                        if desc
                         else []
                     ),
+                    html.Span(
+                        result_str,
+                        style={"marginLeft": "6px", "color": "#27ae60" if result and result >= 0 else "#e74c3c"},
+                    ),
                 ],
-                style={"marginBottom": "4px"},
+                style={"marginBottom": "6px", "display": "flex", "alignItems": "center"},
             )
         )
 
     return html.Div(
         [
             html.H5(
-                "Showdown",
+                title,
                 style={
-                    "color": "#a855f7",
-                    "borderBottom": "2px solid #a855f7",
+                    "color": street_color,
+                    "borderBottom": f"2px solid {street_color}",
                     "paddingBottom": "4px",
                     "marginBottom": "8px",
                 },
