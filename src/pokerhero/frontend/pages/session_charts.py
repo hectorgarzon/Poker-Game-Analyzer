@@ -56,6 +56,7 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
     plot_df = cumulative_df.melt(ignore_index=False, var_name='Jugador', value_name='Stack')
     pivot_pos.index = cumulative_df.index
     plot_df['Posicion'] = pivot_pos.melt(ignore_index=False)['value']
+    plot_df = plot_df.dropna(subset=['Posicion'])
     plot_df.index.name = 'Mano'
     plot_df = plot_df.reset_index()
 
@@ -84,7 +85,7 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
             plot_df[mask]['Jugador'],
             plot_df[mask]['Stack'],
             colors[mask],
-            plot_df[mask]['Posicion'].fillna('—')
+            plot_df[mask]['Posicion']
         ])
         trace.hovertemplate = (
             "<span style='color:%{customdata[2]}'>" +
