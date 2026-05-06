@@ -89,7 +89,7 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
         ])
         trace.hovertemplate = (
             "<span style='color:%{customdata[2]}'>" +
-            "<b>%{customdata[0]}</b> (%{customdata[3]}): %{customdata[1]:.2f}" +
+            "(%{customdata[3]}) <b>%{customdata[0]}</b>: %{customdata[1]:.2f}" +
             "</span><extra></extra>"
         )
 
