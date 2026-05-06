@@ -591,7 +591,7 @@ def _build_villain_section(
     return html.Div(
         [
             html.H5(
-                "Villains",
+                "Players",
                 style={
                     "color": "#e67e22",
                     "borderBottom": "2px solid #e67e22",
