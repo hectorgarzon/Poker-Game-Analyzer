@@ -32,7 +32,7 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
     try:
         hero_name = get_setting(conn, "hero_username", default="")
         query = """
-            SELECT h.id as hand_id, p.username, hp.net_result
+            SELECT h.id as hand_id, p.username, hp.net_result, hp.position
             FROM hands h
             JOIN hand_players hp ON h.id = hp.hand_id
             JOIN players p ON hp.player_id = p.id
@@ -48,11 +48,14 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
 
     # Procesamiento de datos
     pivot_df = df.pivot(index='hand_id', columns='username', values='net_result').fillna(0)
+    pivot_pos = df.pivot(index='hand_id', columns='username', values='position')
     cumulative_df = pivot_df.cumsum().reset_index(drop=True)
     cumulative_df.index = cumulative_df.index + 1
 
     # Preparar datos para Plotly
     plot_df = cumulative_df.melt(ignore_index=False, var_name='Jugador', value_name='Stack')
+    pivot_pos.index = cumulative_df.index
+    plot_df['Posicion'] = pivot_pos.melt(ignore_index=False)['value']
     plot_df.index.name = 'Mano'
     plot_df = plot_df.reset_index()
 
@@ -80,11 +83,12 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
         trace.customdata = np.column_stack([
             plot_df[mask]['Jugador'],
             plot_df[mask]['Stack'],
-            colors[mask]
+            colors[mask],
+            plot_df[mask]['Posicion'].fillna('—')
         ])
         trace.hovertemplate = (
             "<span style='color:%{customdata[2]}'>" +
-            "<b>%{customdata[0]}</b>: %{customdata[1]:.2f}" +
+            "<b>%{customdata[0]}</b> (%{customdata[3]}): %{customdata[1]:.2f}" +
             "</span><extra></extra>"
         )
 
