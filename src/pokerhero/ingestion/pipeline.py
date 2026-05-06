@@ -168,11 +168,12 @@ def ingest_directory(
         if f.name.startswith("HH")
         and "Dinero ficticio" not in f.name
         and "€" in f.name
-        and " T" not in f.name
+        # and " T" not in f.name
         and f.name not in processed_files
     ]
 
     for txt_file in files_to_process:
+        print(f"Ingesting file {txt_file} ")
         res = ingest_file(txt_file, hero_username, conn)
         results.append(res)
 
