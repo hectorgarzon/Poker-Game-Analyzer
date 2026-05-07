@@ -2,7 +2,7 @@ import dash
 import pandas as pd
 import plotly.express as px
 import numpy as np
-from dash import html, dcc
+from dash import html, dcc, Input, Output, callback
 from pokerhero.database.db import get_connection, get_setting
 
 dash.register_page(__name__, path="/session-charts")
@@ -49,19 +49,27 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
     # Procesamiento de datos
     pivot_df = df.pivot(index='hand_id', columns='username', values='net_result').fillna(0)
     pivot_pos = df.pivot(index='hand_id', columns='username', values='position')
+
+    # Mapeo para preservar el hand_id real (para el clickData)
+    hand_id_map = dict(enumerate(pivot_df.index, start=1))
+
     cumulative_df = pivot_df.cumsum().reset_index(drop=True)
     cumulative_df.index = cumulative_df.index + 1
+    cumulative_df.index.name = 'Mano'
 
     # Preparar datos para Plotly
-    plot_df = cumulative_df.melt(ignore_index=False, var_name='Jugador', value_name='Stack')
+    plot_df = cumulative_df.melt(ignore_index=False, var_name='Jugador', value_name='Stack').reset_index()
+
+    # Recuperar el hand_id real usando el número de mano
+    plot_df['hand_id'] = plot_df['Mano'].map(hand_id_map)
+
     pivot_pos.index = cumulative_df.index
-    plot_df['Posicion'] = pivot_pos.melt(ignore_index=False)['value']
-    # Extraer el resultado neto de la mano actual
+    plot_df['Posicion'] = pivot_pos.melt(ignore_index=False)['value'].values
+
     pivot_df.index = cumulative_df.index
-    plot_df['Delta'] = pivot_df.melt(ignore_index=False)['value']
+    plot_df['Delta'] = pivot_df.melt(ignore_index=False)['value'].values
+
     plot_df = plot_df.dropna(subset=['Posicion'])
-    plot_df.index.name = 'Mano'
-    plot_df = plot_df.reset_index()
 
     # Ordenar jugadores con héroe primero
     players = plot_df['Jugador'].unique().tolist()
@@ -88,17 +96,19 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
     for trace in fig.data:
         mask = plot_df['Jugador'] == trace.name
         trace.customdata = np.column_stack([
-            plot_df[mask]['Jugador'],
-            plot_df[mask]['Stack'],
-            colors[mask],
-            plot_df[mask]['Posicion'],
-            plot_df[mask]['Delta']
-        ])
-        trace.hovertemplate = (
-            "<span style='color:%{customdata[2]}'>" +
-            "(%{customdata[3]}) <b>%{customdata[0]}</b>: %{customdata[1]:.2f} (%{customdata[4]:+.2f})" +
-            "</span><extra></extra>"
-        )
+        plot_df[mask]['Jugador'],
+        plot_df[mask]['Stack'],
+        colors[mask],
+        plot_df[mask]['Posicion'],
+        plot_df[mask]['Delta'],
+        plot_df[mask]['hand_id']  # Añadimos el hand_id
+    ])
+    trace.hovertemplate = (
+        "<span style='color:%{customdata[2]}'>" +
+        "(%{customdata[3]}) <b>%{customdata[0]}</b>: %{customdata[1]:.2f} (%{customdata[4]:+.2f})" +
+        "<br>Hand ID: %{customdata[5]}" +  # Mostramos el hand_id en el hover
+        "</span><extra></extra>"
+    )
 
     if hero_name:
         fig.update_traces(line=dict(width=4), selector=dict(name=hero_name))
@@ -109,7 +119,10 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
         hovermode="x unified"
     )
 
-    return dcc.Graph(figure=fig)
+    return dcc.Graph(
+        id="session-chart-graph",  # ID necesario para el callback
+        figure=fig
+    )
 
 def _render_breadcrumb(session_id: int):
     label = _get_session_label(session_id)
@@ -148,6 +161,7 @@ def layout(session_id: str | None = None, **kwargs: object) -> html.Div:
     return html.Div(
         style={"fontFamily": "sans-serif", "maxWidth": "1000px", "margin": "40px auto", "padding": "0 20px"},
         children=[
+            dcc.Location(id="url"),
             html.H2("📈 Gráficos de la Sesión"),
             # Contenedor flex para alinear texto y botones
             html.Div([
@@ -168,3 +182,16 @@ def layout(session_id: str | None = None, **kwargs: object) -> html.Div:
             _build_session_chart(s_id) if s_id else html.Div("No se ha especificado ninguna sesión.")
         ]
     )
+
+@callback(
+    Output("url", "href"),  # Redirige usando dcc.Location
+    Input("session-chart-graph", "clickData"),  # ID del gráfico (lo definiremos abajo)
+    prevent_initial_call=True,
+)
+def navigate_to_hand(click_data):
+    if not click_data:
+        raise dash.exceptions.PreventUpdate
+
+    # Extraemos el hand_id del punto clickeado
+    hand_id = click_data["points"][0]["customdata"][5]  # Índice 5 porque lo añadimos al final
+    return f"/hand/{hand_id}"
