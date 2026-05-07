@@ -83,7 +83,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
         "textAlign": "left",
         "padding": "2px 5px",
         "fontSize": "13px",
-        "maxWidth": "80px",
+        "maxWidth": "100px",
         "whiteSpace": "normal",
         "wordBreak": "break-word"
     }
@@ -129,7 +129,10 @@ def _build_player_table(df: pd.DataFrame) -> Any:
         ],
         data=rows,
         sort_action="custom",
-        style_table={"width": "100%", "overflowX": "auto"},
+        style_table={
+            "overflowX": "auto",  # Habilita scroll horizontal
+            "minWidth": "100%",   # Ancho mínimo del contenedor
+        },
         style_header={
             "backgroundColor": "#0074D9",
             "color": "white",
