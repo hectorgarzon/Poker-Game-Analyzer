@@ -2,7 +2,7 @@ import dash
 import pandas as pd
 import plotly.express as px
 import numpy as np
-from dash import html, dcc, Input, Output, callback
+from dash import html, dcc, Input, Output, callback, State
 from pokerhero.database.db import get_connection, get_setting
 
 dash.register_page(__name__, path="/session-charts")
@@ -184,14 +184,18 @@ def layout(session_id: str | None = None, **kwargs: object) -> html.Div:
     )
 
 @callback(
-    Output("url", "href"),  # Redirige usando dcc.Location
-    Input("session-chart-graph", "clickData"),  # ID del gráfico (lo definiremos abajo)
+    Output("url", "href"),
+    Input("session-chart-graph", "clickData"),
+    State("url", "search"), # Obtenemos los parámetros actuales de la URL (?session_id=...)
     prevent_initial_call=True,
 )
-def navigate_to_hand(click_data):
+def navigate_to_hand(click_data, search):
     if not click_data:
         raise dash.exceptions.PreventUpdate
 
     # Extraemos el hand_id del punto clickeado
-    hand_id = click_data["points"][0]["customdata"][5]  # Índice 5 porque lo añadimos al final
-    return f"/hand/{hand_id}"
+    hand_id = click_data["points"][0]["customdata"][5]
+
+    # Construimos la URL pasando el origen y los parámetros actuales (session_id)
+    query_params = search if search else "?"
+    return f"/hand/{hand_id}{query_params}&origin=charts"

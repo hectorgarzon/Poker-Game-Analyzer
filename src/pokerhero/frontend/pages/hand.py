@@ -331,10 +331,24 @@ def _format_math_cell(
 
     return result
 
-def layout(hand_id: int | str | None = None) -> Component:
+def layout(hand_id: int | str | None = None, **kwargs: str) -> Component:
     """Layout principal de la página de mano."""
     if hand_id is None:
         return html.Div("ID de mano no proporcionado", style={"color": "red"})
+
+    # Determinar URL y texto de retorno basado en el origen
+    origin = kwargs.get("origin")
+    session_id = kwargs.get("session_id")
+
+    if origin == "charts":
+        back_href = f"/session-charts?session_id={session_id}" if session_id else "/session-charts"
+        back_text = "← Volver a Gráficos"
+    elif session_id:
+        back_href = f"/sessions?session_id={session_id}"
+        back_text = "← Volver a Sesión"
+    else:
+        back_href = "/sessions"
+        back_text = "← Volver a Sesiones"
 
     return html.Div(
         style={
@@ -346,8 +360,8 @@ def layout(hand_id: int | str | None = None) -> Component:
         children=[
             html.H2("🃏 Detalle de Mano"),
             dcc.Link(
-                "← Volver a Sesiones",
-                href="/sessions",
+                back_text,
+                href=back_href,
                 style={"fontSize": "13px", "color": "#0074D9"},
             ),
             html.Hr(),
