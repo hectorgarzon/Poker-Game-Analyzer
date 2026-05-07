@@ -83,9 +83,11 @@ def _build_player_table(df: pd.DataFrame) -> Any:
         "textAlign": "left",
         "padding": "2px 5px",
         "fontSize": "13px",
-        "maxWidth": "100px",
-        "whiteSpace": "normal",
-        "wordBreak": "break-word"
+        "wordBreak": "break-word",
+        "minWidth": "80px",  # Ancho mínimo por columna (ajusta según necesidad)
+        "width": "80px",     # Ancho fijo por columna
+        "maxWidth": "180px",  # Ancho máximo por columna
+        "whiteSpace": "normal",  # Permite saltos de línea si el texto es largo
     }
     rows = []
     for _, row in df.iterrows():
