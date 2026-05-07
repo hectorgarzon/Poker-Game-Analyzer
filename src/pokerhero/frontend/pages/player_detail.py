@@ -288,7 +288,7 @@ def layout(player_id: str = None, **kwargs):
                                     ),
                                 ]
                             )
-                        ], open=False),
+                        ], open=True),
                     ]
                 ),
             ]),
