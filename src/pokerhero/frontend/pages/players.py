@@ -320,7 +320,7 @@ def _render_players(db_path: str) -> html.Div | str:
                 dcc.Dropdown(
                     id="player-filter-type",
                     options=[
-                        {"label": "All", "value": "all"},
+                        # {"label": "All", "value": "all"},
                         {"label": "TAG", "value": "TAG"},
                         {"label": "LAG", "value": "LAG"},
                         {"label": "Fish", "value": "Fish"},
