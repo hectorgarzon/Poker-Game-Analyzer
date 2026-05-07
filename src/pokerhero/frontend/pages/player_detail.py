@@ -41,6 +41,7 @@ def layout(player_id: str = None, **kwargs):
     # Obtener las manos y resultados del jugador y del Hero
     hands_query = """
         SELECT
+            h.id as db_id,
             h.source_hand_id as hand_id,
             hp.net_result,
             COALESCE(hp_hero.net_result, 0) as hero_net_result,
@@ -120,6 +121,7 @@ def layout(player_id: str = None, **kwargs):
             "padding": "0 20px",
         },
         children=[
+            dcc.Location(id="player-detail-url"),
             html.H2(f"👤 Detalles del Jugador: {username}"),
             dcc.Link(
                 "← Volver a Players",
@@ -310,6 +312,7 @@ def _filter_player_hands(showdown_filter, player_id):
 
     query = """
         SELECT
+            h.id as db_id,
             h.source_hand_id as hand_id,
             hp.net_result,
             COALESCE(hp_hero.net_result, 0) as hero_net_result,
@@ -327,3 +330,17 @@ def _filter_player_hands(showdown_filter, player_id):
         df = df[df["both_showdown"] == '✓']
 
     return df.to_dict("records")
+
+@callback(
+    Output("player-detail-url", "href"),
+    Input("player-hands-table", "active_cell"),
+    State("player-hands-table", "derived_viewport_data"),
+    State("player-id-store", "data"),
+    prevent_initial_call=True
+)
+def _navigate_to_hand(active_cell, data, player_id):
+    if not active_cell or not data:
+        return dash.no_update
+
+    db_id = data[active_cell["row"]]["db_id"]
+    return f"/hand/{db_id}?origin=player&player_id={player_id}"

@@ -339,10 +339,14 @@ def layout(hand_id: int | str | None = None, **kwargs: str) -> Component:
     # Determinar URL y texto de retorno basado en el origen
     origin = kwargs.get("origin")
     session_id = kwargs.get("session_id")
+    player_id = kwargs.get("player_id")
 
     if origin == "charts":
         back_href = f"/session-charts?session_id={session_id}" if session_id else "/session-charts"
         back_text = "← Volver a Gráficos"
+    elif origin == "player": # Nueva condición para retorno a jugador
+        back_href = f"/player/{player_id}" if player_id else "/players"
+        back_text = "← Volver al Jugador"
     elif session_id:
         back_href = f"/sessions?session_id={session_id}"
         back_text = "← Volver a Sesión"
