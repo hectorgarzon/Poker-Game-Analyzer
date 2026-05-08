@@ -498,7 +498,7 @@ def _render_hand_view(
     )
 
     # Sección de acciones
-    sections = _build_action_sections(actions_df, flop, turn, river)
+    sections = _build_action_sections(actions_df, flop, turn, river,bb_size=hand_details.get("bb_size", 0.05))
 
     # Showdown
     board_str = " ".join(p for p in [flop, turn, river] if p)
@@ -633,7 +633,8 @@ def _build_action_sections(
     df: pd.DataFrame,
     flop: str,
     turn: str,
-    river: str
+    river: str,
+    bb_size: float
 ) -> list[Component]:
     """Construye las secciones de acciones por calle."""
     sections: list[html.Div] = []
@@ -750,7 +751,7 @@ def _build_action_sections(
                         }
                     ),
                     html.Td(
-                        f"Pot: {pot_before:,.6g}",
+                        f"Pot: {pot_before:,.6g} ({pot_before/bb_size:,.1f} bb)",
                         style={
                             **_TD,
                             "color": "var(--text-4, #888)",
