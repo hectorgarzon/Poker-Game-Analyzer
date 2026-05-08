@@ -399,6 +399,17 @@ def render_hand(state: dict) -> Component:
     finally:
         conn.close()
 
+def _get_hero_player_id(db_path: str) -> int | None:
+    """Obtiene el ID del jugador héroe desde la base de datos."""
+    if db_path == ":memory:":
+        return None
+    conn = get_connection(db_path)
+    try:
+        username = get_setting(conn, "hero_username", default="")
+        return upsert_player(conn, username) if username else None
+    finally:
+        conn.close()
+
 def _render_hand_view(
     hand_id: int,
     hand_details: dict,
@@ -416,6 +427,26 @@ def _render_hand_view(
     hand_is_fav = hand_details.get("is_favorite", False)
     session_id = hand_details.get("session_id", 0)
     opp_stats = hand_details.get("opp_stats", pd.DataFrame())
+
+    # Verificar si hay EV calculado
+    ev_cache = _load_ev_cache_for_hand(hand_id)
+    has_ev = any(ev_cache.values())
+
+    if not has_ev:
+        header_children.insert(
+            1,  # Insertar después del título de la mano
+            html.Div(
+                "⚠️ El EV no ha sido calculado para esta mano. Usa el botón '📊 Calculate EVs' en la vista de sesiones.",
+                style={
+                    "background": "#fff3cd",
+                    "border": "1px solid #ffeeba",
+                    "borderRadius": "4px",
+                    "padding": "8px",
+                    "marginBottom": "12px",
+                    "fontSize": "13px",
+                }
+            )
+        )
 
     # Sección de información básica
     header_children = [
@@ -498,7 +529,7 @@ def _render_hand_view(
     )
 
     # Sección de acciones
-    sections = _build_action_sections(actions_df, flop, turn, river,bb_size=hand_details.get("bb_size", 0.05))
+    sections = _build_action_sections(actions_df, flop, turn, river, bb_size=hand_details.get("bb_size", 0.05), hand_id=hand_id)
 
     # Showdown
     board_str = " ".join(p for p in [flop, turn, river] if p)
@@ -629,17 +660,97 @@ def _build_villain_section(
         style={"marginBottom": "20px"}
     )
 
+
+def _build_ev_cell(
+    cache_row: dict[str, object] | None,
+    action_type: str,
+) -> str | html.Div:
+    """Construye la celda de EV para la tabla de acciones.
+
+    Args:
+        cache_row: Diccionario con los datos del EV desde action_ev_cache,
+                  o None si no hay datos.
+        action_type: Tipo de acción ('BET', 'RAISE', 'CALL', 'FOLD', etc.)
+
+    Returns:
+        Contenido de la celda (texto o componente HTML).
+    """
+    if cache_row is None:
+        return "—"
+
+    equity = float(cache_row["equity"])
+    ev = float(cache_row["ev"])
+    ev_type = str(cache_row["ev_type"])
+    ev_str = _fmt_pnl(ev)
+
+    if action_type == "FOLD":
+        # EV almacenado es el "EV de pagar" (para evaluar si el fold fue correcto)
+        if ev > 0:
+            label = f"⚠ Deberías haber pagado (EV: {ev_str})"
+            color = "#e74c3c"  # Rojo
+        else:
+            label = f"✓ Buen fold (EV: {ev_str})"
+            color = "#27ae60"  # Verde
+        return html.Div(html.Span(label, style={"color": color, "fontSize": "12px"}))
+
+    # Para acciones de rango (BET, RAISE, CALL)
+    equity_pct = f"{equity * 100:.0f}%"
+    multiway_note = " (aprox. multiway)" if ev_type == "range_multiway_approx" else ""
+    summary = f"Equity: {equity_pct} | EV: {ev_str}{multiway_note}"
+
+    # Información adicional en tooltip
+    preflop_action = str(cache_row.get("villain_preflop_action", "desconocido"))
+    contracted = cache_row.get("contracted_range_size")
+    sample_count = int(float(cache_row.get("sample_count", 0)))
+    tooltip_parts = [f"Tipo de rango preflop: {preflop_action}"]
+    if contracted is not None:
+        tooltip_parts.append(f"Rango contraído: {int(float(contracted))} combos")
+    tooltip_parts += [
+        f"Muestras: {sample_count}",
+        "Nota: Los bluffs no están modelados explícitamente.",
+    ]
+    tooltip = " | ".join(tooltip_parts)
+
+    children = [
+        html.Span(summary),
+        html.Span(
+            " ℹ️",
+            title=tooltip,
+            style={
+                "cursor": "help",
+                "color": "#aaa",
+                "fontSize": "11px",
+                "marginLeft": "4px",
+            },
+        ),
+    ]
+
+    # Advertencia para calls con EV negativo
+    if action_type == "CALL" and ev < 0:
+        children.append(
+            html.Div(
+                "[Fold era mejor ↑]",
+                style={"color": "#e74c3c", "fontSize": "11px"},
+            )
+        )
+
+    return html.Div(children, style={"lineHeight": "1.3"})
+
 def _build_action_sections(
     df: pd.DataFrame,
     flop: str,
     turn: str,
     river: str,
-    bb_size: float
+    bb_size: float,
+    hand_id: int
 ) -> list[Component]:
-    """Construye las secciones de acciones por calle."""
+    """Construye las secciones de acciones por calle, incluyendo columna EV."""
     sections: list[html.Div] = []
     current_street: str | None = None
     street_rows: list[html.Tr] = []
+
+    # Cargar el cache de EV para esta mano (si existe)
+    ev_cache = _load_ev_cache_for_hand(hand_id) if not df.empty else {}
 
     def _flush(street: str, rows: list[html.Tr]) -> html.Div:
         colour = _STREET_COLOURS.get(street, "#333")
@@ -668,7 +779,16 @@ def _build_action_sections(
                     },
                 ),
                 html.Table(
-                    rows,
+                    [
+                        html.Thead(html.Tr([
+                            html.Th("Jugador", style={**_TH, "width": "200px"}),
+                            html.Th("Acción", style={**_TH, "width": "150px"}),
+                            html.Th("Bote", style=_TH),
+                            html.Th("Contexto", style=_TH),
+                            html.Th("EV", style=_TH),  # Nueva columna EV
+                        ])),
+                        html.Tbody(rows)
+                    ],
                     style={
                         "width": "100%",
                         "borderCollapse": "collapse",
@@ -733,13 +853,16 @@ def _build_action_sections(
             pot_before=pot_before,
         )
 
+        # Construir celda de EV
+        ev_cell_content = _build_ev_cell(
+            ev_cache.get(int(action["id"])) if action["is_hero"] else None,
+            action_type
+        )
+
         street_rows.append(
             html.Tr(
-                 [
-                    html.Td(
-                        actor_str,
-                        style={**_TD, "width": "200px", "fontWeight": "600"},
-                    ),
+                [
+                    html.Td(actor_str, style={**_TD, "width": "200px", "fontWeight": "600"}),
                     html.Td(
                         label,
                         style={
@@ -752,18 +875,19 @@ def _build_action_sections(
                     ),
                     html.Td(
                         f"Pot: {pot_before:,.6g} ({pot_before/bb_size:,.1f} bb)",
-                        style={
-                            **_TD,
-                            "color": "var(--text-4, #888)",
-                            "fontSize": "12px",
-                        },
+                        style={**_TD, "color": "var(--text-4, #888)", "fontSize": "12px"},
                     ),
                     html.Td(
                         extra,
+                        style={**_TD, "color": "var(--text-3, #555)", "fontSize": "12px"},
+                    ),
+                    html.Td(  # Nueva celda EV
+                        ev_cell_content,
                         style={
                             **_TD,
-                            "color": "var(--text-3, #555)",
                             "fontSize": "12px",
+                            "minWidth": "150px",
+                            "whiteSpace": "normal",
                         },
                     ),
                 ],
@@ -775,6 +899,35 @@ def _build_action_sections(
         sections.append(_flush(current_street, street_rows))
 
     return sections
+
+def _load_ev_cache_for_hand(hand_id: int) -> dict[int, dict[str, object]]:
+    """Carga el cache de EV para una mano específica."""
+    db_path = _get_db_path()
+    conn = get_connection(db_path)
+    ev_cache = {}
+
+    try:
+        hero_id = _get_hero_player_id(db_path)
+        if hero_id is None:
+            return ev_cache
+
+        old_factory = conn.row_factory
+        conn.row_factory = sqlite3.Row
+        for ev_row in conn.execute(
+            """
+            SELECT aec.*
+            FROM action_ev_cache aec
+            JOIN actions a ON aec.action_id = a.id
+            WHERE a.hand_id = ? AND aec.hero_id = ?
+            """,
+            (hand_id, hero_id),
+        ).fetchall():
+            ev_cache[int(ev_row["action_id"])] = dict(ev_row)
+        conn.row_factory = old_factory
+    finally:
+        conn.close()
+
+    return ev_cache
 
 def _get_db_path() -> str:
     """Get the database path from the app config."""
