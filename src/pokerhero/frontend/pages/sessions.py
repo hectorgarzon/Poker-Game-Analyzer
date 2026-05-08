@@ -2225,20 +2225,6 @@ def _render_session_report(db_path: str, session_id: int) -> tuple[html.Div | st
         [
             _build_session_narrative(kpis_df, actions_df, session_label),
             _build_session_kpi_strip(kpis_df, actions_df),
-            pos_table,
-            _build_ev_summary(
-                ev_df,
-                ev_calculated=ev_count > 0,
-                lucky_threshold=lucky_threshold,
-                unlucky_threshold=unlucky_threshold,
-            ),
-            _build_flagged_hands_list(
-                ev_df,
-                session_id=session_id,
-                lucky_threshold=lucky_threshold,
-                unlucky_threshold=unlucky_threshold,
-            ),
-            _build_calculate_ev_section(),
             html.Div(
                 [
                     html.Button(
@@ -2273,6 +2259,20 @@ def _render_session_report(db_path: str, session_id: int) -> tuple[html.Div | st
                 ],
                 style={"display": "flex", "gap": "12px", "marginTop": "16px"},
             ),
+            pos_table,
+            _build_ev_summary(
+                ev_df,
+                ev_calculated=ev_count > 0,
+                lucky_threshold=lucky_threshold,
+                unlucky_threshold=unlucky_threshold,
+            ),
+            _build_flagged_hands_list(
+                ev_df,
+                session_id=session_id,
+                lucky_threshold=lucky_threshold,
+                unlucky_threshold=unlucky_threshold,
+            ),
+            _build_calculate_ev_section(),
         ],
         style={"maxWidth": "900px"},
     )
