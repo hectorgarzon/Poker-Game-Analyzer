@@ -783,10 +783,10 @@ def _render(
             html.Div(
                 style={"display": "flex", "gap": "12px", "align-items": "center"},
                 children=[
-                    _kpi_card("No flop", f"{total_hands - saw_flop}", font_size="20px"),
-                    _kpi_card("Finished in flop", f"{saw_flop - saw_turn}", font_size="20px"),
-                    _kpi_card("Finished in turn", f"{saw_turn - saw_river}", font_size="20px"),
-                    _kpi_card("Finished in river", f"{saw_river}", font_size="20px"),
+                    _kpi_card("No flop", f"{total_hands - saw_flop} ({((total_hands - saw_flop)/total_hands*100):.1f}%)", font_size="20px"),
+                    _kpi_card("Finished in flop", f"{saw_flop - saw_turn} ({((saw_flop - saw_turn)/total_hands*100):.1f}%)", font_size="20px"),
+                    _kpi_card("Finished in turn", f"{saw_turn - saw_river} ({((saw_turn - saw_river)/total_hands*100):.1f}%)", font_size="20px"),
+                    _kpi_card("Finished in river", f"{saw_river} ({(saw_river/total_hands*100):.1f}%)", font_size="20px"),
                 ],
             ),
         ],
