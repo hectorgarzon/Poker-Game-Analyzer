@@ -428,26 +428,6 @@ def _render_hand_view(
     session_id = hand_details.get("session_id", 0)
     opp_stats = hand_details.get("opp_stats", pd.DataFrame())
 
-    # Verificar si hay EV calculado
-    ev_cache = _load_ev_cache_for_hand(hand_id)
-    has_ev = any(ev_cache.values())
-
-    if not has_ev:
-        header_children.insert(
-            1,  # Insertar después del título de la mano
-            html.Div(
-                "⚠️ El EV no ha sido calculado para esta mano. Usa el botón '📊 Calculate EVs' en la vista de sesiones.",
-                style={
-                    "background": "#fff3cd",
-                    "border": "1px solid #ffeeba",
-                    "borderRadius": "4px",
-                    "padding": "8px",
-                    "marginBottom": "12px",
-                    "fontSize": "13px",
-                }
-            )
-        )
-
     # Sección de información básica
     header_children = [
         html.Div(
@@ -485,6 +465,26 @@ def _render_hand_view(
         ),
         dcc.Store(id="hand-fav-id-store", data=hand_id),
     ]
+
+    # Verificar si hay EV calculado
+    ev_cache = _load_ev_cache_for_hand(hand_id)
+    has_ev = any(ev_cache.values())
+
+    if not has_ev:
+        header_children.insert(
+            1,  # Insertar después del título de la mano
+            html.Div(
+                "⚠️ El EV no ha sido calculado para esta mano. Usa el botón '📊 Calculate EVs' en la vista de sesiones.",
+                style={
+                    "background": "#fff3cd",
+                    "border": "1px solid #ffeeba",
+                    "borderRadius": "4px",
+                    "padding": "8px",
+                    "marginBottom": "12px",
+                    "fontSize": "13px",
+                }
+            )
+        )
 
      # Sección de Villains (oponentes) - ahora incluye al Hero
     hero_username = hand_details.get("hero_username", "enygma9999")  # Obtener el nombre de usuario del Hero
