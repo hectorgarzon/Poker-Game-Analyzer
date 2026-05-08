@@ -403,6 +403,7 @@ layout = html.Div(
         "padding": "0 20px",
     },
     children=[
+        dcc.Location(id="sessions-url-redirect"),
         html.H2("🔍 Review Sessions"),
         dcc.Link(
             "← Back to Home",
@@ -1010,7 +1011,7 @@ def _navigate_from_session_table(
 
 
 @callback(
-    Output("drill-down-state", "data", allow_duplicate=True),
+    Output("sessions-url-redirect", "href"),
     Input("hand-table", "active_cell"),
     State("hand-table", "derived_viewport_data"),
     State("drill-down-state", "data"),
@@ -1020,8 +1021,13 @@ def _navigate_from_hand_table(
     cell: dict[str, Any] | None,
     data: list[dict[str, Any]] | None,
     current_state: _DrillDownState,
-) -> _DrillDownState:
-    return _compute_state_from_cell(None, cell, None, data, current_state)
+) -> str:
+    if cell is not None and data:
+        row = data[cell["row"]]
+        hand_id = int(row["id"])
+        session_id = int(current_state.get("session_id") or 0)
+        return f"/hand/{hand_id}?session_id={session_id}"
+    raise dash.exceptions.PreventUpdate
 
 
 @callback(
