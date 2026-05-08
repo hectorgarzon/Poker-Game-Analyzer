@@ -692,6 +692,16 @@ def _build_action_sections(
             actor_str = f"🦸 {actor_str}"
 
         action_type = str(action["action_type"])
+        # Determinar color de fondo según el tipo de acción
+        action_bg_map = {
+            "BET": "#f39c12",
+            "RAISE": "#e74c3c",
+            "CALL": "#3498db",
+            "FOLD": "#bdc3c7",
+            "CHECK": "#3458db", 
+        }
+        bg_color = action_bg_map.get(action_type.upper(), "transparent")
+
         amount = float(action["amount"])
         pot_before = float(action["pot_before"])
         amount_to_call = float(action["amount_to_call"])
@@ -724,12 +734,20 @@ def _build_action_sections(
 
         street_rows.append(
             html.Tr(
-                [
+                 [
                     html.Td(
                         actor_str,
                         style={**_TD, "width": "200px", "fontWeight": "600"},
                     ),
-                    html.Td(label, style=_TD),
+                    html.Td(
+                        label,
+                        style={
+                            **_TD,
+                            "backgroundColor": bg_color,
+                            "color": "white" if bg_color != "transparent" else "inherit",
+                            "fontWeight": "600" if bg_color != "transparent" else "normal"
+                        }
+                    ),
                     html.Td(
                         f"Pot: {pot_before:,.6g}",
                         style={
