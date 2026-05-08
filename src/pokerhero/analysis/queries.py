@@ -490,7 +490,19 @@ def get_hero_hand_players(
                 WHERE a.hand_id = hp.hand_id
                   AND a.player_id = hp.player_id
                   AND a.street = 'FLOP'
-            ) THEN 1 ELSE 0 END AS saw_flop
+            ) THEN 1 ELSE 0 END AS saw_flop,
+            CASE WHEN EXISTS (
+                SELECT 1 FROM actions a
+                WHERE a.hand_id = hp.hand_id
+                  AND a.player_id = hp.player_id
+                  AND a.street = 'TURN'
+            ) THEN 1 ELSE 0 END AS saw_turn,
+            CASE WHEN EXISTS (
+                SELECT 1 FROM actions a
+                WHERE a.hand_id = hp.hand_id
+                  AND a.player_id = hp.player_id
+                  AND a.street = 'RIVER'
+            ) THEN 1 ELSE 0 END AS saw_river
         FROM hand_players hp
         JOIN hands h ON h.id = hp.hand_id
         JOIN sessions s ON s.id = h.session_id

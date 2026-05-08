@@ -709,48 +709,54 @@ def _render(
             stake_options,
         )
 
-    # --- Scalar KPIs ---
+    # --- Cálculo de variables con valores por defecto ---
+    # Fechas
+    if not sessions_df.empty:
+        min_date = pd.to_datetime(sessions_df['start_time']).min().strftime('%Y-%m-%d')
+        max_date = pd.to_datetime(sessions_df['start_time']).max().strftime('%Y-%m-%d')
+    else:
+        min_date = "N/A"
+        max_date = "N/A"
+
+    # Sesiones
+    n_sessions = len(sessions_df) if not sessions_df.empty else 0
+
+    # Manos
+    n_hands = len(hp_df)
+
+    # P&L y Win Rate
     pnl = total_profit(hp_df)
     win_rate = win_rate_bb100(hp_df)
-    n_sessions = len(sessions_df)
-    n_hands = len(hp_df)
-    # Kpis for current period
+    pnl_str = _fmt_pnl(pnl)
+    pnl_color = "var(--pnl-positive, green)" if pnl >= 0 else "var(--pnl-negative, red)"
+    wr_str = f"{'+' if win_rate >= 0 else ''}{win_rate:.1f} bb/100"
+    wr_color = "var(--pnl-positive, green)" if win_rate >= 0 else "var(--pnl-negative, red)"
+
+    # Estadísticas preflop
     vpip = vpip_pct(hp_df) * 100
     pfr = pfr_pct(hp_df) * 100
     three_bet = three_bet_pct(opp_df) * 100
     limp = limp_pct(hp_df) * 100
 
-    # Kpis for previous period
-    vpip_prev = vpip_pct(hp_df_prev) * 100
-    pfr_prev = pfr_pct(hp_df_prev) * 100
-    # three_bet_prev = three_bet_pct(opp_df_prev) * 100
-    limp_prev = limp_pct(hp_df_prev) * 100
+    # Estadísticas preflop del periodo anterior
+    vpip_prev = vpip_pct(hp_df_prev) * 100 if not hp_df_prev.empty else 0
+    pfr_prev = pfr_pct(hp_df_prev) * 100 if not hp_df_prev.empty else 0
+    limp_prev = limp_pct(hp_df_prev) * 100 if not hp_df_prev.empty else 0
 
-    # Get date range
-    min_date = pd.to_datetime(sessions_df['start_time']).min().strftime('%Y-%m-%d')
-    max_date = pd.to_datetime(sessions_df['start_time']).max().strftime('%Y-%m-%d')
+    # Progresión por calles
+    total_hands = len(hp_df)
+    saw_flop = hp_df['saw_flop'].sum()
+    saw_turn = hp_df['saw_turn'].sum()
+    saw_river = hp_df['saw_river'].sum()
 
-    pnl_str = _fmt_pnl(pnl)
-    pnl_color = "var(--pnl-positive, green)" if pnl >= 0 else "var(--pnl-negative, red)"
-    wr_str = f"{'+' if win_rate >= 0 else ''}{win_rate:.1f} bb/100"
-    wr_color = (
-        "var(--pnl-positive, green)" if win_rate >= 0 else "var(--pnl-negative, red)"
-    )
-
+    # --- Construcción de la sección de KPIs ---
     kpi_section = html.Div(
         id="kpi-section",
-        style={
-            "display": "flex",
-            "flex-direction": "column",
-        },
+        style={"display": "flex", "flex-direction": "column"},
         children=[
+            # Primera fila: Fechas, sesiones, manos, P&L, win rate
             html.Div(
-                style={
-                    "display": "flex",
-                    "gap": "12px",
-                    "align-items": "center",
-                    "marginBottom": "12px",
-                },
+                style={"display": "flex", "gap": "12px", "align-items": "center", "marginBottom": "12px"},
                 children=[
                     _kpi_card("Dates", f"{min_date} -> {max_date}", font_size=_KPI_FIRST_LINE_FONT_SIZE),
                     _kpi_card("Sessions", str(n_sessions), font_size=_KPI_FIRST_LINE_FONT_SIZE),
@@ -759,205 +765,32 @@ def _render(
                     _kpi_card("Win Rate", wr_str, color=wr_color, font_size=_KPI_FIRST_LINE_FONT_SIZE),
                 ],
             ),
+            # Segunda fila: VPIP, PFR, 3-Bet, Limp
             html.Div(
-                style={
-                    "display": "flex",
-                    "gap": "12px",
-                    "align-items": "center",
-                },
+                style={"display": "flex", "gap": "12px", "align-items": "center", "marginBottom": "12px"},
                 children=[
-                    _kpi_card(
-                        "VPIP",
-                        f"{vpip:.1f}%",
-                        prev_value=f"{vpip_prev:.1f}%",
-                        color=get_vpip_color(vpip),
-                        prev_color=get_vpip_color(vpip_prev),
-                    ),
-                    _kpi_card(
-                        "PFR",
-                        f"{pfr:.1f}%",
-                        prev_value=f"{pfr_prev:.1f}%",
-                        color=get_pfr_color(pfr),
-                        prev_color=get_pfr_color(pfr_prev),
-                    ),
-                    _kpi_card(
-                        "3-Bet",
-                        f"{three_bet:.1f}%",
-                        prev_value=f"",
-                        color=get_3bet_color(three_bet),
-                        prev_color=get_3bet_color(three_bet),
-                    ),
-                    _kpi_card(
-                        "LIMP",
-                        f"{limp:.1f}%",
-                        prev_value=f"{limp_prev:.1f}%",
-                        color=get_limp_color(limp),
-                        prev_color=get_limp_color(limp_prev),
-                    ),
+                    _kpi_card("VPIP", f"{vpip:.1f}%", prev_value=f"{vpip_prev:.1f}%",
+                            color=get_vpip_color(vpip), prev_color=get_vpip_color(vpip_prev)),
+                    _kpi_card("PFR", f"{pfr:.1f}%", prev_value=f"{pfr_prev:.1f}%",
+                            color=get_pfr_color(pfr), prev_color=get_pfr_color(pfr_prev)),
+                    _kpi_card("3-Bet", f"{three_bet:.1f}%", prev_value="",
+                            color=get_3bet_color(three_bet)),
+                    _kpi_card("LIMP", f"{limp:.1f}%", prev_value=f"{limp_prev:.1f}%",
+                            color=get_limp_color(limp), prev_color=get_limp_color(limp_prev)),
+                ],
+            ),
+            # Tercera fila: Progresión por calles
+            html.Div(
+                style={"display": "flex", "gap": "12px", "align-items": "center"},
+                children=[
+                    _kpi_card("No flop", f"{total_hands - saw_flop}", font_size="20px"),
+                    _kpi_card("Finished in flop", f"{saw_flop - saw_turn}", font_size="20px"),
+                    _kpi_card("Finished in turn", f"{saw_turn - saw_river}", font_size="20px"),
+                    _kpi_card("Finished in river", f"{saw_river}", font_size="20px"),
                 ],
             ),
         ],
     )
-
-    """ Commented out to reduce load time
-    # --- Bankroll graph ---
-    import plotly.graph_objects as go
-
-    cumulative = timeline_df["net_result"].cumsum()
-    fig = go.Figure(
-        go.Scatter(
-            x=list(range(1, len(cumulative) + 1)),
-            y=cumulative.tolist(),
-            mode="lines",
-            line={"color": "#0074D9", "width": 2},
-            fill="tozeroy",
-            fillcolor="rgba(0,116,217,0.08)",
-            hovertemplate="Hand %{x}<br>Cumulative P&L: %{y:,.4g}<extra></extra>",
-        )
-    )
-    chart_bg = "#1a1a2e" if theme == "dark" else "#fff"
-    chart_grid = "#303050" if theme == "dark" else "#eee"
-    fig.update_layout(
-        title=None,
-        xaxis_title="Hands played",
-        yaxis_title="Cumulative P&L",
-        margin={"l": 50, "r": 20, "t": 20, "b": 40},
-        plot_bgcolor=chart_bg,
-        paper_bgcolor=chart_bg,
-        xaxis={"showgrid": True, "gridcolor": chart_grid},
-        yaxis={"showgrid": True, "gridcolor": chart_grid, "zeroline": True},
-        height=280,
-    )
-    bankroll_section = html.Div(
-        [
-            html.H4(
-                "Bankroll Graph",
-                style={"marginBottom": "8px", "color": "var(--text-2, #333)"},
-            ),
-            dcc.Graph(
-                id="bankroll-graph",
-                figure=fig,
-                config={"displayModeBar": False},
-            ),
-        ],
-        style={"marginBottom": "28px"},
-    )
-
-    # --- Positional stats table ---
-    position_order = ["BTN", "CO", "MP", "MP+1", "UTG", "UTG+1", "SB", "BB"]
-    pos_rows: list[html.Tr] = []
-
-    for pos in position_order:
-        pos_hp = hp_df[hp_df["position"] == pos]
-        if pos_hp.empty:
-            continue
-        pos_actions = actions_df[actions_df["position"] == pos]
-        pos_hand_ids = set(pos_hp["hand_id"].tolist())
-        pos_opp = opp_df[opp_df["hand_id"].isin(pos_hand_ids)]
-        pos_vpip = vpip_pct(pos_hp) * 100
-        pos_pfr = pfr_pct(pos_hp) * 100
-        pos_3bet = three_bet_pct(pos_opp) * 100
-        pos_cbet = cbet_pct(pos_opp) * 100
-        pos_af = aggression_factor(pos_actions)
-        pos_pnl = total_profit(pos_hp)
-        af_str = f"{pos_af:.2f}" if pos_af != float("inf") else "∞"
-        pnl_style = {
-            **_TD,
-            "color": (
-                "var(--pnl-positive, green)"
-                if pos_pnl >= 0
-                else "var(--pnl-negative, red)"
-            ),
-        }
-
-        # Traffic-light colours for VPIP, PFR, 3-Bet
-        canon = canonical_position(pos)
-        vpip_b = tl_targets.get(("vpip", canon), tl_targets[("vpip", "utg")])
-        pfr_b = tl_targets.get(("pfr", canon), tl_targets[("pfr", "utg")])
-        tbet_b = tl_targets.get(("3bet", canon), tl_targets[("3bet", "utg")])
-        tl_color = _TL_COLORS[
-            traffic_light(
-                pos_vpip,
-                vpip_b["green_min"],
-                vpip_b["green_max"],
-                vpip_b["yellow_min"],
-                vpip_b["yellow_max"],
-            )
-        ]
-        pfr_tl_color = _TL_COLORS[
-            traffic_light(
-                pos_pfr,
-                pfr_b["green_min"],
-                pfr_b["green_max"],
-                pfr_b["yellow_min"],
-                pfr_b["yellow_max"],
-            )
-        ]
-        tbet_tl_color = _TL_COLORS[
-            traffic_light(
-                pos_3bet,
-                tbet_b["green_min"],
-                tbet_b["green_max"],
-                tbet_b["yellow_min"],
-                tbet_b["yellow_max"],
-            )
-        ]
-        pos_rows.append(
-            html.Tr(
-                [
-                    html.Td(pos, style={**_TD, "fontWeight": "600"}),
-                    html.Td(len(pos_hp), style=_TD),
-                    html.Td(
-                        f"{pos_vpip:.1f}%", style={**_TD, "backgroundColor": tl_color}
-                    ),
-                    html.Td(
-                        f"{pos_pfr:.1f}%",
-                        style={**_TD, "backgroundColor": pfr_tl_color},
-                    ),
-                    html.Td(
-                        f"{pos_3bet:.1f}%",
-                        style={**_TD, "backgroundColor": tbet_tl_color},
-                    ),
-                    html.Td(f"{pos_cbet:.1f}%", style=_TD),
-                    html.Td(af_str, style=_TD),
-                    html.Td(
-                        _fmt_pnl(pos_pnl),
-                        style=pnl_style,
-                    ),
-                ]
-            )
-        )
-
-    positional_section = html.Div(
-        id="positional-stats",
-        children=[
-            html.H4(
-                "Positional Stats",
-                style={"marginBottom": "8px", "color": "var(--text-2, #333)"},
-            ),
-            html.Table(
-                [
-                    html.Thead(
-                        html.Tr(
-                            [
-                                html.Th("Position", style=_TH),
-                                html.Th("Hands", style=_TH),
-                                _stat_header("VPIP%", _STAT_TOOLTIPS["VPIP%"]),
-                                _stat_header("PFR%", _STAT_TOOLTIPS["PFR%"]),
-                                _stat_header("3-Bet%", _STAT_TOOLTIPS["3-Bet%"]),
-                                _stat_header("C-Bet%", _STAT_TOOLTIPS["C-Bet%"]),
-                                _stat_header("AF", _STAT_TOOLTIPS["AF"]),
-                                html.Th("Net P&L", style=_TH),
-                            ]
-                        )
-                    ),
-                    html.Tbody(pos_rows),
-                ],
-                style={"width": "100%", "borderCollapse": "collapse"},
-            ),
-        ],
-    )
-    """
 
     return (
         html.Div(
