@@ -11,11 +11,12 @@ from urllib.parse import parse_qs, urlparse
 from pokerhero.analysis.generate_hand_text import generate_hand_text
 import dash
 import pandas as pd
-from dash import Input, Output, State, callback, dcc, html
+from dash import Input, Output, State, callback, dcc, html, no_update
 from dash.development.base_component import Component
 
 from pokerhero.database.db import get_connection, get_setting, upsert_player
 from pokerhero.analysis.queries import get_actions, get_hand_details
+from pokerhero.analysis.hand_ai_analysis import analyze_hand_with_ai
 
 dash.register_page(__name__, path_template="/hand/<hand_id>")  # type: ignore[no-untyped-call]
 
@@ -478,6 +479,27 @@ def _render_hand_view(
                 ),
                 html.Div(id="copy-status-message", style={"display": "inline-block"}),
                 dcc.Store(id="hand-text-store", data=hand_text),
+                # Nuevo botón de análisis con IA
+                html.Button(
+                    "🤖 Analizar con IA",
+                    id="ai-analysis-btn",
+                    n_clicks=0,
+                    style={
+                        "background": "#6c5ce7",
+                        "color": "white",
+                        "border": "none",
+                        "borderRadius": "4px",
+                        "padding": "6px 12px",
+                        "marginRight": "10px",
+                        "cursor": "pointer",
+                        "fontSize": "14px"
+                    }
+                ),
+                dcc.Loading(
+                    id="ai-analysis-loading",
+                    type="circle",
+                    children=html.Div(id="ai-analysis-result")
+                ),
                 html.Button(
                     [
                         "★" if hand_is_fav else "☆",
@@ -519,6 +541,7 @@ def _render_hand_view(
             }
         ),
         dcc.Store(id="hand-fav-id-store", data=hand_id),
+        dcc.Store(id="ai-analysis-store", data=None),
     ]
 
     # Verificar si hay EV calculado
@@ -998,6 +1021,74 @@ def _get_db_path() -> str:
     """Get the database path from the app config."""
     result: str = dash.get_app().server.config.get("DB_PATH", ":memory:")  # type: ignore[no-untyped-call]
     return result
+
+@callback(
+    Output("ai-analysis-result", "children"),
+    Output("ai-analysis-store", "data"),
+    Input("ai-analysis-btn", "n_clicks"),
+    State("hand-state", "data"),
+    State("ai-analysis-store", "data"),
+    prevent_initial_call=True
+)
+def analyze_hand_with_ai_callback(n_clicks, hand_state, current_analysis):
+    """Analiza la mano con IA y muestra el resultado."""
+    if n_clicks > 0:
+        hand_id = hand_state["hand_id"]
+        db_path = _get_db_path()
+        conn = get_connection(db_path)
+
+        try:
+            # Mostrar indicador de carga
+            if n_clicks == 1 or current_analysis is None:
+                analysis = analyze_hand_with_ai(conn, hand_id)
+                if analysis["status"] == "success":
+                    return (
+                        html.Div(
+                            dcc.Markdown(analysis["analysis"]),
+                            style={
+                                "background": "#f8f9fa",
+                                "border": "1px solid #e9ecef",
+                                "borderRadius": "8px",
+                                "padding": "15px",
+                                "marginTop": "15px",
+                                "maxWidth": "100%",
+                                "overflowX": "auto"
+                            }
+                        ),
+                        analysis
+                    )
+                else:
+                    return (
+                        html.Div(
+                            f"Error al analizar la mano: {analysis['error']}",
+                            style={
+                                "color": "#e74c3c",
+                                "marginTop": "15px"
+                            }
+                        ),
+                        no_update
+                    )
+            else:
+                # Si ya tenemos el análisis, solo lo mostramos
+                return (
+                    html.Div(
+                        dcc.Markdown(current_analysis["analysis"]),
+                        style={
+                            "background": "#f8f9fa",
+                            "border": "1px solid #e9ecef",
+                            "borderRadius": "8px",
+                            "padding": "15px",
+                            "marginTop": "15px",
+                            "maxWidth": "100%",
+                            "overflowX": "auto"
+                        }
+                    ),
+                    no_update
+                )
+        finally:
+            conn.close()
+
+    return no_update, no_update
 
 @callback(
     Output("hand-fav-btn-hand-page", "children"),
