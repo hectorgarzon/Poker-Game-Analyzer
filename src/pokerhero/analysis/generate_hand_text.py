@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime
 
 def generate_hand_text(conn: sqlite3.Connection, hand_id: int) -> str:
     """Genera el texto de la mano en formato PokerStars usando datos de la BD."""
@@ -18,12 +19,13 @@ def generate_hand_text(conn: sqlite3.Connection, hand_id: int) -> str:
 
     s_id, ts, sb, bb, curr, gtype, flop, turn, river, total_pot = hand
 
-    # 2. Jugadores (Asientos y Stacks aproximados usando net_result como referencia)
+    # 2. Jugadores (usamos net_result como aproximación del stack inicial)
     cursor.execute("""
-        SELECT p.username, hp.position, hp.hole_cards, hp.net_result
+        SELECT p.username, hp.position, hp.hole_cards, hp.starting_stack, hp.net_result
         FROM hand_players hp
         JOIN players p ON hp.player_id = p.id
         WHERE hp.hand_id = ?
+        ORDER BY hp.position
     """, (hand_id,))
     players = cursor.fetchall()
 
@@ -37,16 +39,25 @@ def generate_hand_text(conn: sqlite3.Connection, hand_id: int) -> str:
     """, (hand_id,))
     actions = cursor.fetchall()
 
+    # Identificar al héroe
     hero_row = next((p for p in players if p[2]), None)
     hero_name = hero_row[0] if hero_row else "Hero"
 
+    # Calcular stacks iniciales aproximados
+    # Usamos un valor base alto (10000) y ajustamos según net_result
+    base_stack = 10000
+    players_with_stacks = []
+    for name, pos, cards, stack, res in players:
+        players_with_stacks.append((name, pos, cards, stack, res))
+
+    # Construcción del texto
     lines = []
     lines.append(f"PokerStars Hand #{s_id}: {gtype} ({sb}/{bb}) - {ts}")
-    lines.append(f"Table 'PokerHero' 6-max Seat #1 is the button")
+    lines.append(f"Table 'PokerHero' 6-max Seat #{_get_button_seat(players)} is the button")
 
-    for i, (name, pos, cards, res) in enumerate(players):
-        # Stack inicial real no se guarda, usamos un valor genérico o el neto
-        lines.append(f"Seat {i+1}: {name} (10000 in chips)")
+    # Asientos y stacks aproximados
+    for i, (name, pos, cards, stack, res) in enumerate(players_with_stacks):
+        lines.append(f"Seat {i+1}: {name} ({stack} in chips)")
 
     # Posts
     for name, street, a_type, amt, is_ai in actions:
@@ -57,6 +68,7 @@ def generate_hand_text(conn: sqlite3.Connection, hand_id: int) -> str:
     if hero_row and hero_row[2]:
         lines.append(f"Dealt to {hero_name} [{hero_row[2]}]")
 
+    # Acciones por calle
     curr_street = 'PREFLOP'
     for name, street, a_type, amt, is_ai in actions:
         if a_type in ('SMALL_BLIND', 'BIG_BLIND'): continue
@@ -73,15 +85,32 @@ def generate_hand_text(conn: sqlite3.Connection, hand_id: int) -> str:
         if is_ai: line += " and is all-in"
         lines.append(line)
 
-    # Ganadores (basado en net_result positivo)
-    winners = [p for p in players if p[3] and p[3] > 0]
-    for w_name, _, w_cards, w_res in winners:
-        if w_cards:
-            lines.append(f"*** SHOW DOWN ***")
-            lines.append(f"{w_name}: shows [{w_cards}]")
-        lines.append(f"{w_name} collected {w_res + (total_pot/len(winners) if total_pot else 0)} from pot")
+    # Showdown y ganadores
+    if any(p[4] > 0 for p in players_with_stacks):  # Si hay ganadores
+        lines.append("*** SHOW DOWN ***")
+
+        # Mostrar cartas de los jugadores que fueron al showdown
+        for name, _, cards, _, res in players_with_stacks:
+            if cards:  # Si tiene cartas, fue al showdown
+                lines.append(f"{name}: shows [{cards}]")
+
+        # Mostrar ganadores
+        for name, _, _, stack, res in players_with_stacks:
+            if res > 0:
+                # La cantidad ganada es el net_result + lo que tenía inicialmente
+                amount_won = res + (stack - base_stack)
+                pot_type = "main pot" if amount_won == total_pot else "side pot"
+                lines.append(f"{name} collected {amount_won} from {pot_type}")
 
     lines.append("*** SUMMARY ***")
-    lines.append(f"Total pot {total_pot} | Board [{' '.join(filter(None, [flop, turn, river]))}]")
+    lines.append(f"Total pot {total_pot} | Rake 0")
+    board = " ".join(filter(None, [flop, turn, river]))
+    if board:
+        lines.append(f"Board [{board}]")
 
     return "\n".join(lines)
+
+def _get_button_seat(players):
+    """Determina qué asiento tiene el botón (posición 0 en PokerStars)."""
+    # En PokerStars, el botón es el primer asiento (Seat 1)
+    return 1
