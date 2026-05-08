@@ -348,8 +348,8 @@ def layout(hand_id: int | str | None = None, **kwargs: str) -> Component:
         back_href = f"/player/{player_id}" if player_id else "/players"
         back_text = "← Volver al Jugador"
     elif session_id:
-        back_href = f"/sessions?session_id={session_id}"
-        back_text = "← Volver a Sesión"
+        back_href = f"/sessions?session_id={session_id}&level=hands"
+        back_text = "← Volver a Lista de Manos"
     else:
         back_href = "/sessions"
         back_text = "← Volver a Sesiones"

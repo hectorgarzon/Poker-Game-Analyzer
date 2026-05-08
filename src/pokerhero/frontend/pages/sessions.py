@@ -1015,17 +1015,23 @@ def _navigate_from_session_table(
     Input("hand-table", "active_cell"),
     State("hand-table", "derived_viewport_data"),
     State("drill-down-state", "data"),
+    State("_pages_location", "search"),
     prevent_initial_call=True,
 )
 def _navigate_from_hand_table(
     cell: dict[str, Any] | None,
     data: list[dict[str, Any]] | None,
     current_state: _DrillDownState,
+    search: str,
 ) -> str:
     if cell is not None and data:
         row = data[cell["row"]]
         hand_id = int(row["id"])
-        session_id = int(current_state.get("session_id") or 0)
+        session_id = current_state.get("session_id")
+        if not session_id or session_id == 0:
+            nav = _parse_nav_search(search)
+            session_id = nav.get("session_id", 0) if nav else 0
+
         return f"/hand/{hand_id}?session_id={session_id}"
     raise dash.exceptions.PreventUpdate
 
@@ -1090,15 +1096,13 @@ def _parse_nav_search(search: str) -> _DrillDownState | None:
     """
     if not search:
         return None
-    params = parse_qs(urlparse(search).query)
-    if "hand_id" in params:
-        return _DrillDownState(
-            level="actions",
-            hand_id=int(params["hand_id"][0]),
-            session_id=int(params.get("session_id", ["0"])[0]),
-        )
+    # Usar lstrip para manejar el '?' inicial de forma segura
+    params = parse_qs(search.lstrip("?"))
     if "session_id" in params:
-        return _DrillDownState(level="report", session_id=int(params["session_id"][0]))
+        session_id = int(params["session_id"][0])
+        # Priorizar el nivel de la URL, por defecto 'report'
+        level = params.get("level", ["report"])[0]
+        return _DrillDownState(level=level, session_id=session_id)
     return None
 
 
@@ -1130,21 +1134,16 @@ def _render(
     if pathname != "/sessions":
         raise dash.exceptions.PreventUpdate
 
-    if state is None:
-        state = _DrillDownState(level="sessions")
-
-    # Parse URL params when the search string has not yet been consumed.
-    # On a fresh page load (cross-page nav from dashboard, direct URL entry),
-    # consumed_search is "" (store's initial value) so any search params are
-    # new and get parsed.  After consumption, subsequent callback fires from
-    # click-based navigation (breadcrumb, row click) see the same consumed
-    # value and skip URL parsing — the drill-down-state store is trusted.
+    # Sincronizar estado desde la URL si es necesario
     new_consumed: str = consumed_search or ""
     if search and search != (consumed_search or ""):
         nav_state = _parse_nav_search(search)
         if nav_state is not None:
             state = nav_state
             new_consumed = search
+
+    if state is None:
+        state = _DrillDownState(level="sessions")
 
     level = state.get("level", "sessions")
 
