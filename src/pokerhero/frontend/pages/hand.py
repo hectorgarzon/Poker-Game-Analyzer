@@ -8,6 +8,7 @@ import sqlite3
 from typing import Any, TypedDict
 from urllib.parse import parse_qs, urlparse
 
+from pokerhero.analysis.generate_hand_text import generate_hand_text
 import dash
 import pandas as pd
 from dash import Input, Output, State, callback, dcc, html
@@ -375,6 +376,27 @@ def layout(hand_id: int | str | None = None, **kwargs: str) -> Component:
     )
 
 @callback(
+    Output("copy-status-message", "children"),
+    Input("hand-clipboard", "n_clicks"),
+    State("hand-text-store", "data"),
+    prevent_initial_call=True
+)
+def show_copy_confirmation(n_clicks, hand_text):
+    """Muestra mensaje de confirmación cuando se copia al portapapeles."""
+    if n_clicks:
+        return html.Div(
+            "✅ Copiado al portapapeles",
+            style={
+                "color": "#27ae60",
+                "fontSize": "14px",
+                "marginLeft": "10px",
+                "marginRight": "10px",
+                "animation": "fadeOut 2s ease-out forwards"
+            }
+        )
+    return ""
+
+@callback(
     Output("hand-content", "children"),
     Input("hand-state", "data"),
 )
@@ -428,11 +450,34 @@ def _render_hand_view(
     session_id = hand_details.get("session_id", 0)
     opp_stats = hand_details.get("opp_stats", pd.DataFrame())
 
+    # Generar el texto de la mano
+    db_path = _get_db_path()
+    conn = get_connection(db_path)
+    try:
+        hand_text = generate_hand_text(conn, hand_id)
+    finally:
+        conn.close()
+
     # Sección de información básica
     header_children = [
         html.Div(
             [
                 html.H3(f"Hand #{source_id}", style={"marginTop": "0", "marginBottom": "0"}),
+                # Componente Clipboard en lugar de botón
+                dcc.Clipboard(
+                    id="hand-clipboard",
+                    content=hand_text,  # Texto a copiar
+                    title="Copiar historial de mano",
+                    style={
+                        "display": "inline-block",
+                        "fontSize": "20px",
+                        "marginRight": "10px",
+                        "cursor": "pointer",
+                        "verticalAlign": "middle"
+                    },
+                ),
+                html.Div(id="copy-status-message", style={"display": "inline-block"}),
+                dcc.Store(id="hand-text-store", data=hand_text),
                 html.Button(
                     [
                         "★" if hand_is_fav else "☆",
@@ -462,6 +507,16 @@ def _render_hand_view(
                 "alignItems": "center",
                 "marginBottom": "8px",
             },
+        ),
+        # Mensaje de confirmación de copia
+        html.Div(
+            id="copy-status-message",
+            style={
+                "color": "#27ae60",
+                "fontSize": "14px",
+                "marginBottom": "10px",
+                "height": "20px"
+            }
         ),
         dcc.Store(id="hand-fav-id-store", data=hand_id),
     ]
@@ -899,6 +954,16 @@ def _build_action_sections(
         sections.append(_flush(current_street, street_rows))
 
     return sections
+
+
+html.Div(
+    style={
+        "@keyframes fadeOut": {
+            "0%": {"opacity": "1"},
+            "100%": {"opacity": "0", "display": "none"}
+        }
+    }
+)
 
 def _load_ev_cache_for_hand(hand_id: int) -> dict[int, dict[str, object]]:
     """Carga el cache de EV para una mano específica."""
