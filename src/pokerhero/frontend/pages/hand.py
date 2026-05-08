@@ -743,6 +743,7 @@ def _build_action_sections(
                         label,
                         style={
                             **_TD,
+                            "width": "150px",
                             "backgroundColor": bg_color,
                             "color": "white" if bg_color != "transparent" else "inherit",
                             "fontWeight": "600" if bg_color != "transparent" else "normal"
