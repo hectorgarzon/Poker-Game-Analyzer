@@ -84,7 +84,9 @@ pip install -e ".[dev]"
 pre-commit install
 
 # 4. Run the app
-python run.py
+python run.py 
+    Use export GOOGLE_GEMINI_API_KEY="tu_clave_api_aqui" if you want to use AI features
+    Use POKERHERO_DEBUG=true if you need to run it in debug mode to see changes inmediately
 ```
 
 Then open [http://localhost:8050](http://localhost:8050) in your browser.
