@@ -408,16 +408,23 @@ def layout(hand_id: int | str | None = None, **kwargs: str) -> Component:
     )
 
 @callback(
-    Output("ai-report-modal", "message"),
-    Output("ai-report-modal", "displayed"),
+    Output("ai-report-markdown", "children"),
+    Output("ai-report-modal-container", "style"),
     Input("show-ai-report-btn", "n_clicks"),
+    Input("close-ai-modal", "n_clicks"),
     State("hand-state", "data"),
     prevent_initial_call=True
 )
-def show_ai_report(n_clicks: int, hand_state: dict) -> tuple[str, bool]:
-    """Muestra el contenido del reporte de IA en un modal."""
-    if not n_clicks:
+def show_ai_report(n_open: int, n_close: int, hand_state: dict) -> tuple[str, dict]:
+    """Muestra o oculta el reporte de IA renderizando Markdown."""
+    ctx = dash.callback_context
+    if not ctx.triggered:
         raise dash.exceptions.PreventUpdate
+
+    button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+    if button_id == "close-ai-modal":
+        return dash.no_update, {"display": "none"}
 
     hand_id = hand_state["hand_id"]
     db_path = _get_db_path()
@@ -431,8 +438,8 @@ def show_ai_report(n_clicks: int, hand_state: dict) -> tuple[str, bool]:
         if ai_filepath and ai_filepath.exists():
             with open(ai_filepath, "r", encoding="utf-8") as f:
                 content = f.read()
-            return content, True
-        return "No se encontró el archivo de análisis.", True
+            return content, {"display": "block"}
+        return "No se encontró el archivo de análisis.", {"display": "block"}
     finally:
         conn.close()
 
@@ -590,10 +597,27 @@ def _render_hand_view(
         )
         # Añadir el modal al layout (fuera del header_children)
         header_children.append(
-            dcc.ConfirmDialog(
-                id="ai-report-modal",
-                message="",
-                displayed=False
+            html.Div(
+                id="ai-report-modal-container",
+                style={"display": "none"},
+                children=[
+                    html.Div(
+                        style={
+                            "position": "fixed", "zIndex": "1000", "left": "0", "top": "0",
+                            "width": "100%", "height": "100%", "backgroundColor": "rgba(0,0,0,0.5)"
+                        },
+                        children=html.Div(
+                            style={
+                                "backgroundColor": "white", "margin": "5% auto", "padding": "30px",
+                                "width": "800px", "maxHeight": "80vh", "overflowY": "auto", "borderRadius": "8px"
+                            },
+                            children=[
+                                html.Button("Cerrar", id="close-ai-modal", style={"float": "right", "cursor": "pointer"}),
+                                dcc.Markdown(id="ai-report-markdown")
+                            ]
+                        )
+                    )
+                ]
             )
         )
     else:
