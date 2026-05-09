@@ -408,6 +408,36 @@ def layout(hand_id: int | str | None = None, **kwargs: str) -> Component:
     )
 
 @callback(
+    Output("ai-report-modal", "message"),
+    Output("ai-report-modal", "displayed"),
+    Input("show-ai-report-btn", "n_clicks"),
+    State("hand-state", "data"),
+    prevent_initial_call=True
+)
+def show_ai_report(n_clicks: int, hand_state: dict) -> tuple[str, bool]:
+    """Muestra el contenido del reporte de IA en un modal."""
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+
+    hand_id = hand_state["hand_id"]
+    db_path = _get_db_path()
+    conn = get_connection(db_path)
+
+    try:
+        hand_details = get_hand_details(conn, hand_id)
+        source_id = hand_details.get("source_hand_id", str(hand_id))
+        ai_filepath = _get_ai_analysis_filepath(str(source_id), hand_id)
+
+        if ai_filepath and ai_filepath.exists():
+            with open(ai_filepath, "r", encoding="utf-8") as f:
+                content = f.read()
+            return content, True
+        return "No se encontró el archivo de análisis.", True
+    finally:
+        conn.close()
+
+
+@callback(
     Output("hand-content", "children"),
     Input("hand-state", "data"),
 )
@@ -488,22 +518,6 @@ def _render_hand_view(
                     },
                 ),
                 html.Div(id="copy-status-message", style={"display": "inline-block"}),
-                # Nuevo botón de análisis con IA
-                html.Button(
-                    "🤖 Analizar con IA",
-                    id="ai-analysis-btn",
-                    n_clicks=0,
-                    style={
-                        "background": "#6c5ce7",
-                        "color": "white",
-                        "border": "none",
-                        "borderRadius": "4px",
-                        "padding": "6px 12px",
-                        "marginRight": "10px",
-                        "cursor": "pointer",
-                        "fontSize": "14px"
-                    }
-                ),
                 dcc.Loading(
                     id="ai-analysis-loading",
                     type="circle",
@@ -550,6 +564,57 @@ def _render_hand_view(
             }
         ),
     ]
+
+    # Verificar si existe análisis previo
+    source_id = hand_details.get("source_hand_id", str(hand_id))
+    ai_filepath = _get_ai_analysis_filepath(str(source_id), hand_id)
+
+    if ai_filepath:
+        # Botón para mostrar reporte existente
+        header_children.append(
+            html.Button(
+                "📄 IA Report",
+                id="show-ai-report-btn",  # Mismo ID que el callback
+                n_clicks=0,
+                style={
+                    "background": "#27ae60",
+                    "color": "white",
+                    "border": "none",
+                    "borderRadius": "4px",
+                    "padding": "6px 12px",
+                    "marginRight": "10px",
+                    "cursor": "pointer",
+                    "fontSize": "14px"
+                }
+            )
+        )
+        # Añadir el modal al layout (fuera del header_children)
+        header_children.append(
+            dcc.ConfirmDialog(
+                id="ai-report-modal",
+                message="",
+                displayed=False
+            )
+        )
+    else:
+        # Botón para generar nuevo análisis
+        header_children.append(
+            html.Button(
+                "🤖 Analizar con IA",
+                id="ai-analysis-btn",
+                n_clicks=0,
+                style={
+                    "background": "#6c5ce7",
+                    "color": "white",
+                    "border": "none",
+                    "borderRadius": "4px",
+                    "padding": "6px 12px",
+                    "marginRight": "10px",
+                    "cursor": "pointer",
+                    "fontSize": "14px"
+                }
+            )
+        )
 
     # Verificar si hay EV calculado
     ev_cache = _load_ev_cache_for_hand(hand_id)
@@ -632,6 +697,12 @@ def _render_hand_view(
 
     return html.Div([*header_children, board_div, *sections])
 
+def _get_ai_analysis_filepath(source_hand_id: str, hand_id: int) -> Path | None:
+    """Devuelve la ruta del archivo de análisis si existe, None si no."""
+    ai_dir = Path("ai_analysis")
+    filename = f"{source_hand_id}-{hand_id}.txt"
+    filepath = ai_dir / filename
+    return filepath if filepath.exists() else None
 
 def _build_villain_section(
     villain_rows: list[_VillainRow],
@@ -1034,76 +1105,37 @@ def _get_db_path() -> str:
     Output("copy-status-message", "children", allow_duplicate=True),
     Output("ai-analysis-store", "data"),
     Input("ai-analysis-btn", "n_clicks"),
-    Input("hand-clipboard", "n_clicks"),  # Este es el componente dcc.Clipboard
     State("hand-state", "data"),
     State("hand-text-store", "data"),
     State("ai-analysis-store", "data"),
-    State("hand-details-store", "data"),
     prevent_initial_call=True
 )
-def handle_ai_analysis_and_clipboard(
+def handle_ai_analysis(
     ai_n_clicks,
-    clipboard_n_clicks,
     hand_state,
     hand_text,
-    current_analysis,
-    hand_details
+    current_analysis
 ):
-    """Maneja tanto el análisis con IA como la copia al portapapeles."""
-    ctx = dash.callback_context
-    if not ctx.triggered:
-        return no_update, no_update
+    """Maneja la generación de análisis con IA."""
+    if not ai_n_clicks or ai_n_clicks == 0:
+        raise dash.exceptions.PreventUpdate
 
-    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    hand_id = hand_state["hand_id"]
+    db_path = _get_db_path()
+    conn = get_connection(db_path)
 
-    # Manejar clic en el botón de análisis con IA
-    if triggered_id == "ai-analysis-btn" and (ai_n_clicks or 0) > 0:
-        hand_id = hand_state["hand_id"]
-        db_path = _get_db_path()
-        conn = get_connection(db_path)
+    try:
+        if ai_n_clicks == 1 or current_analysis is None:
+            analysis = analyze_hand_with_ai(conn, hand_id)
 
-        try:
-            if ai_n_clicks == 1 or current_analysis is None:
-                analysis = analyze_hand_with_ai(conn, hand_id)
+            if analysis["status"] == "success":
+                hand_details = get_hand_details(conn, hand_id)
+                source_id = hand_details.get("source_hand_id", str(hand_id))
+                filepath = _save_analysis_to_file(str(source_id), hand_id, analysis["analysis"])
 
-                if analysis["status"] == "success":
-                    # Extraer source_id de hand_details o usar hand_id como fallback
-                    hand_details = get_hand_details(conn, hand_id)
-                    source_id = hand_details.get("source_hand_id", str(hand_id))
-
-                    # Guardar en archivo
-                    filepath = _save_analysis_to_file(str(source_id), hand_id, analysis["analysis"])
-
-                    # Copiar al portapapeles usando JavaScript
-                    return (
-                        html.Div(
-                            f"✅ Análisis guardado en {filepath} y copiado al portapapeles",
-                            style={
-                                "color": "#27ae60",
-                                "fontSize": "14px",
-                                "marginTop": "10px",
-                                "animation": "fadeOut 4s ease-out forwards"
-                            }
-                        ),
-                        analysis
-                    )
-                else:
-                    return (
-                        html.Div(
-                            f"❌ Error: {analysis['error']}",
-                            style={
-                                "color": "#e74c3c",
-                                "fontSize": "14px",
-                                "marginTop": "10px"
-                            }
-                        ),
-                        no_update
-                    )
-            else:
-                # Si ya existe el análisis, copiar al portapapeles usando JavaScript
                 return (
                     html.Div(
-                        "✅ Análisis copiado al portapapeles",
+                        f"✅ Análisis guardado en {filepath}",
                         style={
                             "color": "#27ae60",
                             "fontSize": "14px",
@@ -1111,27 +1143,35 @@ def handle_ai_analysis_and_clipboard(
                             "animation": "fadeOut 4s ease-out forwards"
                         }
                     ),
-                    current_analysis
+                    analysis
                 )
-        finally:
-            conn.close()
-
-    # Manejar clic en el componente Clipboard
-    elif triggered_id == "hand-clipboard" and (clipboard_n_clicks or 0) > 0:
-        return (
-            html.Div(
-                "✅ Historial copiado al portapapeles",
-                style={
-                    "color": "#27ae60",
-                    "fontSize": "14px",
-                    "marginTop": "10px",
-                    "animation": "fadeOut 2s ease-out forwards"
-                }
-            ),
-            no_update
-        )
-
-    return no_update, no_update
+            else:
+                return (
+                    html.Div(
+                        f"❌ Error: {analysis['error']}",
+                        style={
+                            "color": "#e74c3c",
+                            "fontSize": "14px",
+                            "marginTop": "10px"
+                        }
+                    ),
+                    no_update
+                )
+        else:
+            return (
+                html.Div(
+                    "✅ Análisis ya generado",
+                    style={
+                        "color": "#27ae60",
+                        "fontSize": "14px",
+                        "marginTop": "10px",
+                        "animation": "fadeOut 4s ease-out forwards"
+                    }
+                ),
+                current_analysis
+            )
+    finally:
+        conn.close()
 
 @callback(
     Output("hand-fav-btn-hand-page", "children"),
