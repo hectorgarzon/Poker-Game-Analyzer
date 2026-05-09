@@ -65,14 +65,23 @@ class _VillainRow(TypedDict):
     hole_cards: str
     net_result: float | None
 
-def _save_analysis_to_file(hand_id: int, analysis_text: str) -> str:
-    """Guarda el análisis en un archivo .txt y devuelve la ruta."""
+def _save_analysis_to_file(source_hand_id: str, hand_id: int, analysis_text: str) -> str:
+    """Guarda el análisis en un archivo .txt y devuelve la ruta.
+
+    Args:
+        source_hand_id: Número de mano original (ej: "260684331763")
+        hand_id: ID interno de la base de datos
+        analysis_text: Texto del análisis a guardar
+
+    Returns:
+        Ruta completa del archivo guardado
+    """
     # Crear directorio si no existe
     ai_dir = Path("ai_analysis")
     ai_dir.mkdir(exist_ok=True)
 
-    # Nombre del archivo: "260684331763.txt" (sin el #)
-    filename = f"{hand_id}.txt"
+    # Nombre del archivo: "260684331763-123.txt" (sin el #)
+    filename = f"{source_hand_id}-{hand_id}.txt"
     filepath = ai_dir / filename
 
     # Guardar el análisis
@@ -391,6 +400,10 @@ def layout(hand_id: int | str | None = None, **kwargs: str) -> Component:
             html.Hr(),
             dcc.Loading(html.Div(id="hand-content")),
             dcc.Store(id="hand-state", data={"hand_id": int(hand_id)}),
+            dcc.Store(id="hand-text-store", data=""),
+            dcc.Store(id="hand-details-store", data={}),
+            dcc.Store(id="hand-fav-id-store", data=hand_id),
+            dcc.Store(id="ai-analysis-store", data=None),
         ],
     )
 
@@ -414,7 +427,7 @@ def render_hand(state: dict) -> Component:
         actions_df = get_actions(conn, hand_id)
 
         # Construir la visualización de la mano
-        return _render_hand_view(hand_id, hand_details, actions_df)
+        return _render_hand_view(hand_id, hand_details, actions_df)  # Solo devuelve componentes visuales
 
     finally:
         conn.close()
@@ -475,7 +488,6 @@ def _render_hand_view(
                     },
                 ),
                 html.Div(id="copy-status-message", style={"display": "inline-block"}),
-                dcc.Store(id="hand-text-store", data=hand_text),
                 # Nuevo botón de análisis con IA
                 html.Button(
                     "🤖 Analizar con IA",
@@ -537,8 +549,6 @@ def _render_hand_view(
                 "height": "20px"
             }
         ),
-        dcc.Store(id="hand-fav-id-store", data=hand_id),
-        dcc.Store(id="ai-analysis-store", data=None),
     ]
 
     # Verificar si hay EV calculado
@@ -1028,6 +1038,7 @@ def _get_db_path() -> str:
     State("hand-state", "data"),
     State("hand-text-store", "data"),
     State("ai-analysis-store", "data"),
+    State("hand-details-store", "data"),
     prevent_initial_call=True
 )
 def handle_ai_analysis_and_clipboard(
@@ -1035,7 +1046,8 @@ def handle_ai_analysis_and_clipboard(
     clipboard_n_clicks,
     hand_state,
     hand_text,
-    current_analysis
+    current_analysis,
+    hand_details
 ):
     """Maneja tanto el análisis con IA como la copia al portapapeles."""
     ctx = dash.callback_context
@@ -1045,7 +1057,7 @@ def handle_ai_analysis_and_clipboard(
     triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
     # Manejar clic en el botón de análisis con IA
-    if triggered_id == "ai-analysis-btn" and ai_n_clicks > 0:
+    if triggered_id == "ai-analysis-btn" and (ai_n_clicks or 0) > 0:
         hand_id = hand_state["hand_id"]
         db_path = _get_db_path()
         conn = get_connection(db_path)
@@ -1055,8 +1067,12 @@ def handle_ai_analysis_and_clipboard(
                 analysis = analyze_hand_with_ai(conn, hand_id)
 
                 if analysis["status"] == "success":
+                    # Extraer source_id de hand_details o usar hand_id como fallback
+                    hand_details = get_hand_details(conn, hand_id)
+                    source_id = hand_details.get("source_hand_id", str(hand_id))
+
                     # Guardar en archivo
-                    filepath = _save_analysis_to_file(hand_id, analysis["analysis"])
+                    filepath = _save_analysis_to_file(str(source_id), hand_id, analysis["analysis"])
 
                     # Copiar al portapapeles usando JavaScript
                     return (
@@ -1101,7 +1117,7 @@ def handle_ai_analysis_and_clipboard(
             conn.close()
 
     # Manejar clic en el componente Clipboard
-    elif triggered_id == "hand-clipboard" and clipboard_n_clicks > 0:
+    elif triggered_id == "hand-clipboard" and (clipboard_n_clicks or 0) > 0:
         return (
             html.Div(
                 "✅ Historial copiado al portapapeles",
