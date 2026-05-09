@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 import json
 import math
 import sqlite3
@@ -62,6 +64,22 @@ class _VillainRow(TypedDict):
     position: str
     hole_cards: str
     net_result: float | None
+
+def _save_analysis_to_file(hand_id: int, analysis_text: str) -> str:
+    """Guarda el análisis en un archivo .txt y devuelve la ruta."""
+    # Crear directorio si no existe
+    ai_dir = Path("ai_analysis")
+    ai_dir.mkdir(exist_ok=True)
+
+    # Nombre del archivo: "260684331763.txt" (sin el #)
+    filename = f"{hand_id}.txt"
+    filepath = ai_dir / filename
+
+    # Guardar el análisis
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(analysis_text)
+
+    return str(filepath)
 
 def _action_row_style(is_hero: bool) -> dict[str, str]:
     """Return the tr style for an action row."""
@@ -375,27 +393,6 @@ def layout(hand_id: int | str | None = None, **kwargs: str) -> Component:
             dcc.Store(id="hand-state", data={"hand_id": int(hand_id)}),
         ],
     )
-
-@callback(
-    Output("copy-status-message", "children"),
-    Input("hand-clipboard", "n_clicks"),
-    State("hand-text-store", "data"),
-    prevent_initial_call=True
-)
-def show_copy_confirmation(n_clicks, hand_text):
-    """Muestra mensaje de confirmación cuando se copia al portapapeles."""
-    if n_clicks:
-        return html.Div(
-            "✅ Copiado al portapapeles",
-            style={
-                "color": "#27ae60",
-                "fontSize": "14px",
-                "marginLeft": "10px",
-                "marginRight": "10px",
-                "animation": "fadeOut 2s ease-out forwards"
-            }
-        )
-    return ""
 
 @callback(
     Output("hand-content", "children"),
@@ -1022,37 +1019,54 @@ def _get_db_path() -> str:
     result: str = dash.get_app().server.config.get("DB_PATH", ":memory:")  # type: ignore[no-untyped-call]
     return result
 
+
 @callback(
-    Output("ai-analysis-result", "children"),
+    Output("copy-status-message", "children", allow_duplicate=True),
     Output("ai-analysis-store", "data"),
     Input("ai-analysis-btn", "n_clicks"),
+    Input("hand-clipboard", "n_clicks"),  # Este es el componente dcc.Clipboard
     State("hand-state", "data"),
+    State("hand-text-store", "data"),
     State("ai-analysis-store", "data"),
     prevent_initial_call=True
 )
-def analyze_hand_with_ai_callback(n_clicks, hand_state, current_analysis):
-    """Analiza la mano con IA y muestra el resultado."""
-    if n_clicks > 0:
+def handle_ai_analysis_and_clipboard(
+    ai_n_clicks,
+    clipboard_n_clicks,
+    hand_state,
+    hand_text,
+    current_analysis
+):
+    """Maneja tanto el análisis con IA como la copia al portapapeles."""
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return no_update, no_update
+
+    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+    # Manejar clic en el botón de análisis con IA
+    if triggered_id == "ai-analysis-btn" and ai_n_clicks > 0:
         hand_id = hand_state["hand_id"]
         db_path = _get_db_path()
         conn = get_connection(db_path)
 
         try:
-            # Mostrar indicador de carga
-            if n_clicks == 1 or current_analysis is None:
+            if ai_n_clicks == 1 or current_analysis is None:
                 analysis = analyze_hand_with_ai(conn, hand_id)
+
                 if analysis["status"] == "success":
+                    # Guardar en archivo
+                    filepath = _save_analysis_to_file(hand_id, analysis["analysis"])
+
+                    # Copiar al portapapeles usando JavaScript
                     return (
                         html.Div(
-                            dcc.Markdown(analysis["analysis"]),
+                            f"✅ Análisis guardado en {filepath} y copiado al portapapeles",
                             style={
-                                "background": "#f8f9fa",
-                                "border": "1px solid #e9ecef",
-                                "borderRadius": "8px",
-                                "padding": "15px",
-                                "marginTop": "15px",
-                                "maxWidth": "100%",
-                                "overflowX": "auto"
+                                "color": "#27ae60",
+                                "fontSize": "14px",
+                                "marginTop": "10px",
+                                "animation": "fadeOut 4s ease-out forwards"
                             }
                         ),
                         analysis
@@ -1060,33 +1074,46 @@ def analyze_hand_with_ai_callback(n_clicks, hand_state, current_analysis):
                 else:
                     return (
                         html.Div(
-                            f"Error al analizar la mano: {analysis['error']}",
+                            f"❌ Error: {analysis['error']}",
                             style={
                                 "color": "#e74c3c",
-                                "marginTop": "15px"
+                                "fontSize": "14px",
+                                "marginTop": "10px"
                             }
                         ),
                         no_update
                     )
             else:
-                # Si ya tenemos el análisis, solo lo mostramos
+                # Si ya existe el análisis, copiar al portapapeles usando JavaScript
                 return (
                     html.Div(
-                        dcc.Markdown(current_analysis["analysis"]),
+                        "✅ Análisis copiado al portapapeles",
                         style={
-                            "background": "#f8f9fa",
-                            "border": "1px solid #e9ecef",
-                            "borderRadius": "8px",
-                            "padding": "15px",
-                            "marginTop": "15px",
-                            "maxWidth": "100%",
-                            "overflowX": "auto"
+                            "color": "#27ae60",
+                            "fontSize": "14px",
+                            "marginTop": "10px",
+                            "animation": "fadeOut 4s ease-out forwards"
                         }
                     ),
-                    no_update
+                    current_analysis
                 )
         finally:
             conn.close()
+
+    # Manejar clic en el componente Clipboard
+    elif triggered_id == "hand-clipboard" and clipboard_n_clicks > 0:
+        return (
+            html.Div(
+                "✅ Historial copiado al portapapeles",
+                style={
+                    "color": "#27ae60",
+                    "fontSize": "14px",
+                    "marginTop": "10px",
+                    "animation": "fadeOut 2s ease-out forwards"
+                }
+            ),
+            no_update
+        )
 
     return no_update, no_update
 
