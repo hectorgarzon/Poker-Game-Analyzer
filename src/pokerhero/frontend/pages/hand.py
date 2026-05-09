@@ -506,51 +506,99 @@ def _render_hand_view(
     finally:
         conn.close()
 
+    # Verificar si existe análisis previo
+    source_id_str = str(hand_details.get("source_hand_id", hand_id))
+    ai_filepath = _get_ai_analysis_filepath(source_id_str, hand_id)
+
+    ai_button = None
+    ai_modal = html.Div(id="ai-report-modal-container", style={"display": "none"})
+    if ai_filepath:
+        ai_button = html.Button(
+            "📄 IA Report",
+            id="show-ai-report-btn",
+            n_clicks=0,
+            style={
+                "background": "#27ae60", "color": "white", "border": "none",
+                "borderRadius": "4px", "padding": "6px 12px", "marginRight": "10px",
+                "cursor": "pointer", "fontSize": "14px"
+            }
+        )
+        ai_modal = html.Div(
+            id="ai-report-modal-container",
+            style={"display": "none"},
+            children=[
+                html.Div(
+                    style={
+                        "position": "fixed", "zIndex": "1000", "left": "0", "top": "0",
+                        "width": "100%", "height": "100%", "backgroundColor": "rgba(0,0,0,0.5)"
+                    },
+                    children=html.Div(
+                        style={
+                            "backgroundColor": "white", "margin": "5% auto", "padding": "30px",
+                            "width": "800px", "maxHeight": "80vh", "overflowY": "auto", "borderRadius": "8px"
+                        },
+                        children=[
+                            html.Button("Cerrar", id="close-ai-modal", style={"float": "right", "cursor": "pointer"}),
+                            dcc.Markdown(id="ai-report-markdown")
+                        ]
+                    )
+                )
+            ]
+        )
+    else:
+        ai_button = html.Button(
+            "🤖 Analizar con IA",
+            id="ai-analysis-btn",
+            n_clicks=0,
+            style={
+                "background": "#6c5ce7", "color": "white", "border": "none",
+                "borderRadius": "4px", "padding": "6px 12px", "marginRight": "10px",
+                "cursor": "pointer", "fontSize": "14px"
+            }
+        )
+
     # Sección de información básica
     header_children = [
         html.Div(
             [
-                html.H3(f"Hand #{source_id}", style={"marginTop": "0", "marginBottom": "0"}),
-                # Componente Clipboard en lugar de botón
-                dcc.Clipboard(
-                    id="hand-clipboard",
-                    content=hand_text,  # Texto a copiar
-                    title="Copiar historial de mano",
-                    style={
-                        "display": "inline-block",
-                        "fontSize": "20px",
-                        "marginRight": "10px",
-                        "cursor": "pointer",
-                        "verticalAlign": "middle"
-                    },
-                ),
-                html.Div(id="copy-status-message", style={"display": "inline-block"}),
-                dcc.Loading(
-                    id="ai-analysis-loading",
-                    type="circle",
-                    children=html.Div(id="ai-analysis-result")
-                ),
-                html.Button(
+                html.Div(
                     [
-                        "★" if hand_is_fav else "☆",
-                        " Favourite hand",
+                        html.H3(f"Hand #{source_id}", style={"marginTop": "0", "marginBottom": "0", "marginRight": "15px"}),
+                        dcc.Clipboard(
+                            id="hand-clipboard",
+                            content=hand_text,
+                            title="Copiar historial de mano",
+                            style={
+                                "display": "inline-block", "fontSize": "20px", "marginRight": "10px",
+                                "cursor": "pointer", "verticalAlign": "middle"
+                            },
+                        ),
+                        ai_button,
                     ],
-                    id="hand-fav-btn-hand-page",
-                    n_clicks=0,
-                    style={
-                        "display": "flex",
-                        "alignItems": "center",
-                        "gap": "6px",
-                        "background": "#fff8ec" if hand_is_fav else "var(--bg-2, #f5f5f5)",
-                        "border": "1px solid #f5a623" if hand_is_fav else "1px solid var(--border-light, #ccc)",
-                        "borderRadius": "20px",
-                        "padding": "4px 12px",
-                        "fontSize": "15px",
-                        "cursor": "pointer",
-                        "color": "#f5a623" if hand_is_fav else "var(--text-4, #888)",
-                        "fontWeight": "600",
-                        "lineHeight": "1.4",
-                    },
+                    style={"display": "flex", "alignItems": "center"}
+                ),
+                html.Div(
+                    [
+                        dcc.Loading(
+                            id="ai-analysis-loading",
+                            type="circle",
+                            children=html.Div(id="ai-analysis-result")
+                        ),
+                        html.Button(
+                            ["★" if hand_is_fav else "☆", " Favourite hand"],
+                            id="hand-fav-btn-hand-page",
+                            n_clicks=0,
+                            style={
+                                "display": "flex", "alignItems": "center", "gap": "6px",
+                                "background": "#fff8ec" if hand_is_fav else "var(--bg-2, #f5f5f5)",
+                                "border": "1px solid #f5a623" if hand_is_fav else "1px solid var(--border-light, #ccc)",
+                                "borderRadius": "20px", "padding": "4px 12px", "fontSize": "15px",
+                                "cursor": "pointer", "color": "#f5a623" if hand_is_fav else "var(--text-4, #888)",
+                                "fontWeight": "600", "lineHeight": "1.4",
+                            },
+                        ),
+                    ],
+                    style={"display": "flex", "alignItems": "center", "gap": "10px"}
                 ),
             ],
             style={
@@ -560,85 +608,12 @@ def _render_hand_view(
                 "marginBottom": "8px",
             },
         ),
-        # Mensaje de confirmación de copia
+        ai_modal,
         html.Div(
             id="copy-status-message",
-            style={
-                "color": "#27ae60",
-                "fontSize": "14px",
-                "marginBottom": "10px",
-                "height": "20px"
-            }
+            style={"color": "#27ae60", "fontSize": "14px", "marginBottom": "10px", "height": "20px"}
         ),
     ]
-
-    # Verificar si existe análisis previo
-    source_id = hand_details.get("source_hand_id", str(hand_id))
-    ai_filepath = _get_ai_analysis_filepath(str(source_id), hand_id)
-
-    if ai_filepath:
-        # Botón para mostrar reporte existente
-        header_children.append(
-            html.Button(
-                "📄 IA Report",
-                id="show-ai-report-btn",  # Mismo ID que el callback
-                n_clicks=0,
-                style={
-                    "background": "#27ae60",
-                    "color": "white",
-                    "border": "none",
-                    "borderRadius": "4px",
-                    "padding": "6px 12px",
-                    "marginRight": "10px",
-                    "cursor": "pointer",
-                    "fontSize": "14px"
-                }
-            )
-        )
-        # Añadir el modal al layout (fuera del header_children)
-        header_children.append(
-            html.Div(
-                id="ai-report-modal-container",
-                style={"display": "none"},
-                children=[
-                    html.Div(
-                        style={
-                            "position": "fixed", "zIndex": "1000", "left": "0", "top": "0",
-                            "width": "100%", "height": "100%", "backgroundColor": "rgba(0,0,0,0.5)"
-                        },
-                        children=html.Div(
-                            style={
-                                "backgroundColor": "white", "margin": "5% auto", "padding": "30px",
-                                "width": "800px", "maxHeight": "80vh", "overflowY": "auto", "borderRadius": "8px"
-                            },
-                            children=[
-                                html.Button("Cerrar", id="close-ai-modal", style={"float": "right", "cursor": "pointer"}),
-                                dcc.Markdown(id="ai-report-markdown")
-                            ]
-                        )
-                    )
-                ]
-            )
-        )
-    else:
-        # Botón para generar nuevo análisis
-        header_children.append(
-            html.Button(
-                "🤖 Analizar con IA",
-                id="ai-analysis-btn",
-                n_clicks=0,
-                style={
-                    "background": "#6c5ce7",
-                    "color": "white",
-                    "border": "none",
-                    "borderRadius": "4px",
-                    "padding": "6px 12px",
-                    "marginRight": "10px",
-                    "cursor": "pointer",
-                    "fontSize": "14px"
-                }
-            )
-        )
 
     # Verificar si hay EV calculado
     ev_cache = _load_ev_cache_for_hand(hand_id)
