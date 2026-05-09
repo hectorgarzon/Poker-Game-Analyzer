@@ -563,7 +563,7 @@ def _render_hand_view(
             [
                 html.Div(
                     [
-                        html.H3(f"Hand #{source_id}", style={"marginTop": "0", "marginBottom": "0", "marginRight": "15px"}),
+                        html.H3(f"Hand #{source_id}", style={"marginTop": "0", "marginBottom": "0", "marginRight": "40px"}),
                         dcc.Clipboard(
                             id="hand-clipboard",
                             content=hand_text,
@@ -605,13 +605,13 @@ def _render_hand_view(
                 "display": "flex",
                 "justifyContent": "space-between",
                 "alignItems": "center",
-                "marginBottom": "8px",
+                "marginBottom": "0px",
             },
         ),
         ai_modal,
         html.Div(
             id="copy-status-message",
-            style={"color": "#27ae60", "fontSize": "14px", "marginBottom": "10px", "height": "20px"}
+            style={"color": "#27ae60", "fontSize": "14px", "marginBottom": "0px", "height": "20px"}
         ),
     ]
 
