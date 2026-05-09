@@ -43,12 +43,16 @@ def generate_hand_text(conn: sqlite3.Connection, hand_id: int) -> str:
     hero_row = next((p for p in players if p[2]), None)
     hero_name = hero_row[0] if hero_row else "Hero"
 
-    # Calcular stacks iniciales aproximados
-    # Usamos un valor base alto (10000) y ajustamos según net_result
-    base_stack = 10000
+    # Usar stacks iniciales reales
     players_with_stacks = []
     for name, pos, cards, stack, res in players:
         players_with_stacks.append((name, pos, cards, stack, res))
+
+    # Calcular apuestas totales por jugador
+    player_bets = {p[0]: 0 for p in players_with_stacks}
+    for name, street, a_type, amt, is_ai in actions:
+        if a_type in ('BET', 'RAISE', 'CALL', 'SMALL_BLIND', 'BIG_BLIND'):
+            player_bets[name] += amt
 
     # Construcción del texto
     lines = []
@@ -97,10 +101,11 @@ def generate_hand_text(conn: sqlite3.Connection, hand_id: int) -> str:
         # Mostrar ganadores
         for name, _, _, stack, res in players_with_stacks:
             if res > 0:
-                # La cantidad ganada es el net_result + lo que tenía inicialmente
-                amount_won = res + (stack - base_stack)
-                pot_type = "main pot" if amount_won == total_pot else "side pot"
-                lines.append(f"{name} collected {amount_won} from {pot_type}")
+                # La cantidad ganada es el net_result + lo que apostó el jugador
+                amount_won = res + player_bets.get(name, 0)
+                # Determinar si es main pot o side pot
+                pot_type = "main pot" if len([p for p in players_with_stacks if p[4] > 0]) == 1 else "side pot"
+                lines.append(f"{name} collected {amount_won:.2f} from {pot_type}")
 
     lines.append("*** SUMMARY ***")
     lines.append(f"Total pot {total_pot} | Rake 0")
