@@ -483,12 +483,16 @@ def analyze_losing_action_combinations(df: pd.DataFrame) -> None:
                 return None
             actions = actions_str.split(' | ')
             last_action = actions[-1]  # Última acción
-            # Eliminar valores numéricos (ej: "CALL(50)" -> "CALL")
-            clean_action = last_action.split('(')[0] if '(' in last_action else last_action
-            return f"{street_prefix}/{clean_action}"
+
+            # Limpiar completamente la acción:
+            clean_action = last_action.split('(')[0]  # Elimina valores entre paréntesis
+            clean_action = clean_action.split(' to call')[0]  # Elimina "to call X"
+            clean_action = clean_action.strip()  # Elimina espacios
+
+            return f"{street_prefix}/{clean_action}" if clean_action else None
 
         # Preflop: última acción
-        preflop = get_last_action_with_street(row['preflop_actions'], "PF")
+        preflop = get_last_action_with_street(row['preflop_actions'], "PR")
         if preflop:
             combo_parts.append(preflop)
 
@@ -517,16 +521,16 @@ def analyze_losing_action_combinations(df: pd.DataFrame) -> None:
         total_loss=('net_profit', 'sum'),
         hand_count=('hand_id', 'count'),
         avg_loss=('net_profit', 'mean'),
-        median_loss=('net_profit', 'median'),  # Nueva métrica: mediana
+        median_loss=('net_profit', 'median'),
         hand_ids=('hand_id', lambda x: list(x))
     ).reset_index()
 
-     # 4. Ordenar por mayor pérdida total y filtrar combinaciones con al menos 2 manos
+    # 4. Ordenar por mayor pérdida total y filtrar combinaciones con al menos 2 manos
     worst_combos = combo_stats[
-        combo_stats['hand_count'] >= 2  # Filtrar combinaciones con al menos 2 manos
-    ].sort_values('total_loss').head(5)  # Ordenar por pérdida total y tomar top 5
+        combo_stats['hand_count'] >= 2
+    ].sort_values('total_loss').head(5)
 
-     # 5. Mostrar resultados solo si hay combinaciones con al menos 2 manos
+    # 5. Mostrar resultados solo si hay combinaciones con al menos 2 manos
     if worst_combos.empty:
         print("\n⚠️ No se encontraron combinaciones con al menos 2 manos")
     else:
@@ -537,7 +541,7 @@ def analyze_losing_action_combinations(df: pd.DataFrame) -> None:
         for idx, row in worst_combos.iterrows():
             print(f"#{idx+1}: {row['action_combo']}")
             print(f"   - Pérdida total: ${row['total_loss']:.2f}")
-            print(f"   - Pérdida mediana: ${row['median_loss']:.2f}")  # Nueva línea
+            print(f"   - Pérdida mediana: ${row['median_loss']:.2f}")
             print(f"   - Pérdida promedio: ${row['avg_loss']:.2f}")
             print(f"   - Manos: {row['hand_count']}")
             print(f"   - IDs de manos: {', '.join(map(str, row['hand_ids'][:3]))}{'...' if len(row['hand_ids']) > 3 else ''}")
