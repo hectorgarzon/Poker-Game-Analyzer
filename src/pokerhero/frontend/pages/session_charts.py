@@ -93,22 +93,30 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
         lambda x: '#28a745' if x > 0
         else ('#dc3545' if x < 0 else '#808080')
     )
+    # Configurar el hovermode y el formato para todos los jugadores
+    fig.update_layout(
+        hovermode="x unified",
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=12,
+            font_family="sans-serif"
+        )
+    )
+
+    # Configurar el hovertemplate para cada traza
     for trace in fig.data:
         mask = plot_df['Jugador'] == trace.name
         trace.customdata = np.column_stack([
-        plot_df[mask]['Jugador'],
-        plot_df[mask]['Stack'],
-        colors[mask],
-        plot_df[mask]['Posicion'],
-        plot_df[mask]['Delta'],
-        plot_df[mask]['hand_id']  # Añadimos el hand_id
-    ])
-    trace.hovertemplate = (
-        "<span style='color:%{customdata[2]}'>" +
-        "(%{customdata[3]}) <b>%{customdata[0]}</b>: %{customdata[1]:.2f} (%{customdata[4]:+.2f})" +
-        "<br>Hand ID: %{customdata[5]}" +  # Mostramos el hand_id en el hover
-        "</span><extra></extra>"
-    )
+            plot_df[mask]['Jugador'],
+            plot_df[mask]['Stack'],
+            colors[mask],
+            plot_df[mask]['Posicion'],
+            plot_df[mask]['Delta']
+        ])
+        trace.hovertemplate = (
+            "<b>(%{customdata[3]}) %{customdata[0]}</b>: %{customdata[1]:.2f} <span style='color:%{customdata[2]}'>(%{customdata[4]:+.2f})</span>"
+            "<extra></extra>"
+        )
 
     if hero_name:
         fig.update_traces(line=dict(width=4), selector=dict(name=hero_name))
