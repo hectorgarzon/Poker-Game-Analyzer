@@ -488,7 +488,7 @@ def analyze_losing_action_combinations(df: pd.DataFrame) -> None:
             return f"{street_prefix}/{clean_action}"
 
         # Preflop: última acción
-        preflop = get_last_action_with_street(row['preflop_actions'], "PR")
+        preflop = get_last_action_with_street(row['preflop_actions'], "PF")
         if preflop:
             combo_parts.append(preflop)
 
@@ -512,28 +512,36 @@ def analyze_losing_action_combinations(df: pd.DataFrame) -> None:
     df_filtered['action_combo'] = df_filtered.apply(create_action_combo, axis=1)
     df_filtered = df_filtered.dropna(subset=['action_combo'])
 
-    # 3. Agrupar por combinación de acciones y calcular pérdidas
+    # 3. Agrupar por combinación de acciones y calcular estadísticas
     combo_stats = df_filtered.groupby('action_combo').agg(
         total_loss=('net_profit', 'sum'),
         hand_count=('hand_id', 'count'),
         avg_loss=('net_profit', 'mean'),
+        median_loss=('net_profit', 'median'),  # Nueva métrica: mediana
         hand_ids=('hand_id', lambda x: list(x))
     ).reset_index()
 
-    # 4. Ordenar por mayor pérdida total y mostrar las 5 peores
-    worst_combos = combo_stats.sort_values('total_loss').head(5)
+     # 4. Ordenar por mayor pérdida total y filtrar combinaciones con al menos 2 manos
+    worst_combos = combo_stats[
+        combo_stats['hand_count'] >= 2  # Filtrar combinaciones con al menos 2 manos
+    ].sort_values('total_loss').head(5)  # Ordenar por pérdida total y tomar top 5
 
-    # 5. Mostrar resultados
-    print("\n=== TOP 5 COMBINACIONES DE ACCIONES QUE MÁS DINERO PIERDEN ===")
-    print("(Formato: PR/acción -> F/acción -> T/acción -> R/acción)")
-    print("------------------------------------------------------------")
+     # 5. Mostrar resultados solo si hay combinaciones con al menos 2 manos
+    if worst_combos.empty:
+        print("\n⚠️ No se encontraron combinaciones con al menos 2 manos")
+    else:
+        print("\n=== TOP 5 COMBINACIONES DE ACCIONES (2+ MANOS) QUE MÁS DINERO PIERDEN ===")
+        print("(Formato: PR/acción -> F/acción -> T/acción -> R/acción)")
+        print("------------------------------------------------------------")
 
-    for idx, row in worst_combos.iterrows():
-        print(f"#{idx+1}: {row['action_combo']}")
-        print(f"   - Pérdida total: ${row['total_loss']:.2f}")
-        print(f"   - Manos: {row['hand_count']} (${row['avg_loss']:.2f} por mano)")
-        print(f"   - IDs de manos: {', '.join(map(str, row['hand_ids'][:3]))}{'...' if len(row['hand_ids']) > 3 else ''}")
-        print("")
+        for idx, row in worst_combos.iterrows():
+            print(f"#{idx+1}: {row['action_combo']}")
+            print(f"   - Pérdida total: ${row['total_loss']:.2f}")
+            print(f"   - Pérdida mediana: ${row['median_loss']:.2f}")  # Nueva línea
+            print(f"   - Pérdida promedio: ${row['avg_loss']:.2f}")
+            print(f"   - Manos: {row['hand_count']}")
+            print(f"   - IDs de manos: {', '.join(map(str, row['hand_ids'][:3]))}{'...' if len(row['hand_ids']) > 3 else ''}")
+            print("")
 
     # 6. Estadísticas generales
     print("=== ESTADÍSTICAS GENERALES ===")
