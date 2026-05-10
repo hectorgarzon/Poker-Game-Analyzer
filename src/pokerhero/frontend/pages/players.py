@@ -465,7 +465,7 @@ def get_hero_hands_with_actions_existing_queries(db_path: str, hero_id: int) -> 
 def analyze_losing_action_combinations(df: pd.DataFrame) -> None:
     """
     Analiza las combinaciones de acciones del héroe (solo última acción por calle)
-    y muestra las 5 que más dinero hacen perder.
+    mostrando la calle de cada acción, y muestra las 5 que más dinero hacen perder.
     """
     print("\n🔍 Analizando patrones de pérdida (solo última acción por calle)...")
 
@@ -473,36 +473,37 @@ def analyze_losing_action_combinations(df: pd.DataFrame) -> None:
     df_filtered = df[df['flop_actions'].notna()].copy()
     print(f"Manos analizadas: {len(df_filtered)}")
 
-    # 2. Crear combinación de acciones (solo última acción por calle)
+    # 2. Crear combinación de acciones (solo última acción por calle con prefijo de calle)
     def create_action_combo(row):
         combo_parts = []
 
-        # Función para extraer la última acción de una calle
-        def get_last_action(actions_str):
+        # Función para extraer la última acción de una calle con prefijo
+        def get_last_action_with_street(actions_str, street_prefix):
             if pd.isna(actions_str):
                 return None
             actions = actions_str.split(' | ')
             last_action = actions[-1]  # Última acción
             # Eliminar valores numéricos (ej: "CALL(50)" -> "CALL")
-            return last_action.split('(')[0] if '(' in last_action else last_action
+            clean_action = last_action.split('(')[0] if '(' in last_action else last_action
+            return f"{street_prefix}/{clean_action}"
 
         # Preflop: última acción
-        preflop = get_last_action(row['preflop_actions'])
+        preflop = get_last_action_with_street(row['preflop_actions'], "PR")
         if preflop:
             combo_parts.append(preflop)
 
         # Flop: última acción
-        flop = get_last_action(row['flop_actions'])
+        flop = get_last_action_with_street(row['flop_actions'], "F")
         if flop:
             combo_parts.append(flop)
 
         # Turn: última acción
-        turn = get_last_action(row['turn_actions'])
+        turn = get_last_action_with_street(row['turn_actions'], "T")
         if turn:
             combo_parts.append(turn)
 
         # River: última acción
-        river = get_last_action(row['river_actions'])
+        river = get_last_action_with_street(row['river_actions'], "R")
         if river:
             combo_parts.append(river)
 
@@ -524,7 +525,7 @@ def analyze_losing_action_combinations(df: pd.DataFrame) -> None:
 
     # 5. Mostrar resultados
     print("\n=== TOP 5 COMBINACIONES DE ACCIONES QUE MÁS DINERO PIERDEN ===")
-    print("(Formato: Preflop -> Flop -> Turn -> River)")
+    print("(Formato: PR/acción -> F/acción -> T/acción -> R/acción)")
     print("------------------------------------------------------------")
 
     for idx, row in worst_combos.iterrows():
