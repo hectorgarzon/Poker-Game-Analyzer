@@ -100,6 +100,7 @@ def _build_player_table(df: pd.DataFrame) -> Any:
                 "id": int(row["id"]),
                 "username": display_name,
                 "note_text": str(row.get("note_text", "")),
+                "label": str(row.get("label", "")).upper(),
                 "stakes": str(row.get("stakes", "")),
                 "hands_played": int(row["hands_played"]),
                 "total_bankroll": round(float(row["total_bankroll"]), 1),
@@ -176,8 +177,16 @@ def _build_player_table(df: pd.DataFrame) -> Any:
         markdown_options={"html": True},
         tooltip_data=[
             {
-                "username": {"value": r["note_text"], "type": "markdown"}
-            } if r["note_text"] else {}
+                "username": {
+                    "value": (
+                        f"**{r.get('label', '')}**\n{r.get('note_text', '')}"
+                        if r.get("label") and r.get("note_text")
+                        else f"**{r.get('label', '')}**" if r.get("label")
+                        else f"{r.get('note_text', '')}"
+                    ).strip(),
+                    "type": "markdown"
+                }
+            } if r.get("note_text") or r.get("label") else {}
             for r in rows
         ],
         tooltip_delay=0,
@@ -222,7 +231,8 @@ def _render_players(db_path: str) -> html.Div | str:
             pass
     # Mapear el texto de la nota y marcar si existe
     df["note_text"] = df["username"].map(lambda x: notes_dict.get(x, {}).get("notes", ""))
-    df["has_note"] = df["note_text"] != ""
+    df["label"] = df["username"].map(lambda x: notes_dict.get(x, {}).get("label", ""))
+    df["has_note"] = (df["note_text"] != "") | (df["label"] != "")
 
     # Calcular arquetipo aquí para que esté disponible en el Store y filtros
     df["archetype"] = df.apply(

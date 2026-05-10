@@ -36,9 +36,9 @@ LABEL_MAPPING = {
     "1": "",
     "2": "label2",
     "3": "label3",
-    "4": "",
+    "4": "label3",
     "5": "pez",
-    "6": "label6",
+    "6": "peligroso",
     "": ""
 }
 
