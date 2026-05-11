@@ -115,6 +115,7 @@ def get_players(conn: sqlite3.Connection, hero_id: int) -> pd.DataFrame:
         100.0 * SUM(hp.pfr) / COUNT(DISTINCT hp.hand_id) as pfr_pct,
         COUNT(DISTINCT DATE(h.timestamp)) as days_seen,
         COALESCE(SUM(hp.net_result), 0) AS total_bankroll,
+        COALESCE(SUM(hp_hero.net_result), 0) AS hero_vs_player_net,
         COALESCE(SUM(CASE WHEN hp.went_to_showdown = 1 AND hp_hero.went_to_showdown = 1 THEN hp.net_result ELSE 0 END), 0) AS showdown_benefit,
         MIN(CASE WHEN hp.went_to_showdown = 1 AND hp_hero.went_to_showdown = 1 THEN hp.net_result END) AS max_loss_showdown,
         (
