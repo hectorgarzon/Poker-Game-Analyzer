@@ -58,6 +58,7 @@ def create_app(
         children=[
             dcc.Store(id="theme-store", storage_type="local", data="light"),
             html.Span(id="theme-apply-dummy", style={"display": "none"}),
+            dcc.Link("🏠", href="/", style={"position": "fixed", "top": "12px", "left": "16px", "zIndex": "9999"}),
             html.Button(
                 "🌚",
                 id="theme-toggle-btn",
