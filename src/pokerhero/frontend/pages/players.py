@@ -529,7 +529,7 @@ def analyze_losing_action_combinations(df: pd.DataFrame) -> None:
 
     # 4. Ordenar por mayor pérdida total y filtrar combinaciones con al menos 2 manos
     worst_combos = combo_stats[
-        combo_stats['hand_count'] >= 2
+        combo_stats['hand_count'] > 5
     ].sort_values('total_loss').head(5)
 
     # 5. Mostrar resultados solo si hay combinaciones con al menos 2 manos
@@ -580,6 +580,7 @@ def analyze_player_losses_on_load(pathname: str) -> None:
 
     # Obtener todas las manos del héroe con sus acciones
     print("Obteniendo manos del héroe...")
+    # hero_id=8906
     df = get_hero_hands_with_actions_existing_queries(db_path, hero_id)
 
     if df.empty:
