@@ -111,7 +111,8 @@ def _build_session_chart(session_id: int) -> dcc.Graph | html.Div:
             plot_df[mask]['Stack'],
             colors[mask],
             plot_df[mask]['Posicion'],
-            plot_df[mask]['Delta']
+            plot_df[mask]['Delta'],
+            plot_df[mask]['hand_id']
         ])
         trace.hovertemplate = (
             "<b>(%{customdata[3]}) %{customdata[0]}</b>: %{customdata[1]:.2f} <span style='color:%{customdata[2]}'>(%{customdata[4]:+.2f})</span>"
