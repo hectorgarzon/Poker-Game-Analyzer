@@ -1125,8 +1125,9 @@ def handle_ai_analysis(
 
     try:
         if ai_n_clicks == 1 or current_analysis is None:
-            analysis = analyze_hand_with_ai(conn, hand_id)
-
+            hero_username = get_setting(conn, "hero_username", default="enygma9999")
+            analysis = analyze_hand_with_ai(conn, hand_id, hero_username=hero_username)
+            
             if analysis["status"] == "success":
                 hand_details = get_hand_details(conn, hand_id)
                 source_id = hand_details.get("source_hand_id", str(hand_id))

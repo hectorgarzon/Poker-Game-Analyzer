@@ -7,7 +7,7 @@ from pokerhero.analysis.generate_hand_text import generate_hand_text
 
 
 class HandAIAnalyzer:
-    def __init__(self):
+    def __init__(self, hero_username: str):
         # Configurar la API de Gemini
         api_key = os.environ.get("GOOGLE_GEMINI_API_KEY")
         if not api_key:
@@ -15,6 +15,7 @@ class HandAIAnalyzer:
 
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel('models/gemini-flash-latest')
+        self.hero_username = hero_username
 
     def analyze_hand(self, conn: sqlite3.Connection, hand_id: int) -> Dict[str, Any]:
         """
@@ -32,7 +33,7 @@ class HandAIAnalyzer:
 
         # Crear el prompt para la IA
         prompt = f"""
-        Analiza esta mano de poker en formato PokerStars. Proporciona un análisis detallado que incluya:
+        Analiza esta mano de poker en formato PokerStars. El jugador Hero es {self.hero_username}. Proporciona un análisis detallado que incluya:
 
         1. Evaluación general de la mano
         2. Análisis de las decisiones preflop:
@@ -70,7 +71,7 @@ class HandAIAnalyzer:
             }
 
 # Función de conveniencia para usar directamente
-def analyze_hand_with_ai(conn: sqlite3.Connection, hand_id: int) -> Dict[str, Any]:
+def analyze_hand_with_ai(conn: sqlite3.Connection, hand_id: int, hero_username: str) -> Dict[str, Any]:
     """Función de conveniencia para analizar una mano con IA."""
-    analyzer = HandAIAnalyzer()
+    analyzer = HandAIAnalyzer(hero_username=hero_username)
     return analyzer.analyze_hand(conn, hand_id)
