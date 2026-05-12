@@ -1125,7 +1125,8 @@ def handle_ai_analysis(
 
     try:
         if ai_n_clicks == 1 or current_analysis is None:
-            hero_username = get_setting(conn, "hero_username", default="enygma9999")
+            hand_details = get_hand_details(conn, hand_id)
+            hero_username = hand_details.get("hero_username", "")
             analysis = analyze_hand_with_ai(conn, hand_id, hero_username=hero_username)
             
             if analysis["status"] == "success":
@@ -1175,6 +1176,7 @@ def handle_ai_analysis(
 
 @callback(
     Output("hand-fav-btn-hand-page", "children"),
+    Output("hand-fav-btn-hand-page", "style"),
     Input("hand-fav-btn-hand-page", "n_clicks"),
     State("hand-fav-id-store", "data"),
     prevent_initial_call=True,
@@ -1201,18 +1203,20 @@ def _toggle_hand_fav(
         conn.close()
 
     is_fav = bool(row and row[0])
-    style: dict[str, str] = {
-        "display": "flex",
-        "alignItems": "center",
-        "gap": "6px",
-        "background": "#fff8ec" if is_fav else "var(--bg-2, #f5f5f5)",
-        "border": "1px solid #f5a623" if is_fav else "1px solid var(--border-light, #ccc)",
-        "borderRadius": "20px",
-        "padding": "4px 12px",
-        "fontSize": "15px",
-        "cursor": "pointer",
-        "color": "#f5a623" if is_fav else "var(--text-4, #888)",
-        "fontWeight": "600",
-        "lineHeight": "1.4",
-    }
-    return ["★" if is_fav else "☆", " Favourite hand"], style
+    return (
+        ["★" if is_fav else "☆", " Favourite hand"],
+        {
+            "display": "flex",
+            "alignItems": "center",
+            "gap": "6px",
+            "background": "#fff8ec" if is_fav else "var(--bg-2, #f5f5f5)",
+            "border": "1px solid #f5a623" if is_fav else "1px solid var(--border-light, #ccc)",
+            "borderRadius": "20px",
+            "padding": "4px 12px",
+            "fontSize": "15px",
+            "cursor": "pointer",
+            "color": "#f5a623" if is_fav else "var(--text-4, #888)",
+            "fontWeight": "600",
+            "lineHeight": "1.4",
+        }
+    )
