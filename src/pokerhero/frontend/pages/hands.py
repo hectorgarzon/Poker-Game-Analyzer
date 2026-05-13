@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dash
 import pandas as pd
-from dash import html, dash_table
+from dash import html, dash_table, dcc
 from pokerhero.database.db import get_connection, get_setting, upsert_player
 
 dash.register_page(__name__, path="/hands", name="Lista de Manos")
@@ -57,15 +57,21 @@ def layout() -> html.Div:
         })
 
     return html.Div([
-        html.H2("🔍 Todas las Manos"),
+        html.H2("🔍 Hands"),
+        dcc.Link(
+            "← Back to Home",
+            href="/",
+            style={"fontSize": "13px", "color": "#0074D9"},
+        ),
+        html.Hr(),
         dash_table.DataTable(
             id="all-hands-table",
             columns=[
-                {"name": "Fecha", "id": "date"},
-                {"name": "Mano #", "id": "hand_num"},
-                {"name": "Cartas", "id": "hole_cards"},
-                {"name": "Bote", "id": "pot"},
-                {"name": "Resultado Neto", "id": "_pnl_raw", "type": "numeric"},
+                {"name": "Date", "id": "date"},
+                {"name": "Hand #", "id": "hand_num"},
+                {"name": "Hero Cards", "id": "hole_cards"},
+                {"name": "Pot", "id": "pot"},
+                {"name": "Net result", "id": "_pnl_raw", "type": "numeric"},
             ],
             data=rows,
             sort_action="native",
