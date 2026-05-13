@@ -3,7 +3,7 @@ from __future__ import annotations
 import dash
 import pandas as pd
 from dash import html, dash_table, dcc, Input, Output, State, callback
-from pokerhero.database.db import get_connection, get_setting, upsert_player
+from pokerhero.database.db import get_connection, get_setting, upsert_player, toggle_hand_favorite
 
 dash.register_page(__name__, path="/hands", name="Lista de Manos")
 
@@ -127,17 +127,47 @@ def layout(session_id: str | None = None) -> html.Div:
     ], style={"maxWidth": "1000px", "margin": "40px auto", "padding": "0 20px"})
 
 @callback(
-    Output("url-hands", "href"),  # Se cambia de "pathname" a "href"
+    Output("url-hands", "href"),
     Input("all-hands-table", "active_cell"),
     State("all-hands-table", "data"),
     State("url-hands", "search"),
     prevent_initial_call=True
 )
 def on_click_hand(active_cell, rows, search):
-    if active_cell:
+    if active_cell and active_cell["column_id"] != "favorite":
         hand_id = rows[active_cell["row"]]["id"]
         query = f"?origin=hands"
         if search:
             query += f"&{search[1:]}"
         return f"/hand/{hand_id}{query}"
     return dash.no_update
+
+@callback(
+    Output("all-hands-table", "data"),
+    Input("all-hands-table", "active_cell"),
+    State("all-hands-table", "data"),
+    State("url-hands", "search"),
+    prevent_initial_call=True,
+)
+def toggle_favorite(active_cell, rows, search):
+    if not active_cell or active_cell["column_id"] != "favorite":
+        raise dash.exceptions.PreventUpdate
+
+    hand_id = rows[active_cell["row"]]["id"]
+    is_fav_now = rows[active_cell["row"]]["favorite"] == "★"
+
+    # Toggle en la base de datos
+    db_path = dash.get_app().server.config.get("DB_PATH", ":memory:")
+    conn = get_connection(db_path)
+    try:
+        toggle_hand_favorite(conn, hand_id)
+        conn.commit()
+        # Refrescar el estado de favorito
+        is_fav = conn.execute(
+            "SELECT is_favorite FROM hands WHERE id = ?", (hand_id,)
+        ).fetchone()[0]
+        rows[active_cell["row"]]["favorite"] = "★" if is_fav else "☆"
+    finally:
+        conn.close()
+
+    return rows
