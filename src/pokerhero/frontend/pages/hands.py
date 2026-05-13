@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dash
 import pandas as pd
-from dash import html, dash_table, dcc
+from dash import html, dash_table, dcc, Input, Output, State, callback
 from pokerhero.database.db import get_connection, get_setting, upsert_player
 
 dash.register_page(__name__, path="/hands", name="Lista de Manos")
@@ -76,6 +76,7 @@ def layout(session_id: str | None = None) -> html.Div:
         })
 
     return html.Div([
+        dcc.Location(id="url-hands"),
         html.H2(header_text),
         dcc.Link(
             "← Back to Home",
@@ -120,3 +121,15 @@ def layout(session_id: str | None = None) -> html.Div:
             ],
         )
     ], style={"maxWidth": "1000px", "margin": "40px auto", "padding": "0 20px"})
+
+@callback(
+    Output("url-hands", "pathname"),
+    Input("all-hands-table", "active_cell"),
+    State("all-hands-table", "data"),
+    prevent_initial_call=True
+)
+def on_click_hand(active_cell, rows):
+    if active_cell:
+        hand_id = rows[active_cell["row"]]["id"]
+        return f"/hand/{hand_id}"
+    return dash.no_update
