@@ -71,7 +71,6 @@ def layout(session_id: str | None = None) -> html.Div:
             "date": date_val,
             "hand_num": str(row["source_hand_id"]),
             "hole_cards": _format_cards_text(row["hole_cards"]),
-            "pot": f"{float(row['total_pot']):,.6g}",
             "_pnl_raw": pnl,
         })
 
@@ -90,7 +89,6 @@ def layout(session_id: str | None = None) -> html.Div:
                 {"name": "Date", "id": "date"},
                 {"name": "Hand #", "id": "hand_num"},
                 {"name": "Hero Cards", "id": "hole_cards"},
-                {"name": "Pot", "id": "pot"},
                 {"name": "Hero benefit", "id": "_pnl_raw", "type": "numeric"},
             ],
             data=rows,
