@@ -21,9 +21,10 @@ def _format_cards_text(cards_str: str | None) -> str:
             parts.append(f"{rank}{suit}")
     return " ".join(parts) if parts else "—"
 
-def layout() -> html.Div:
+def layout(session_id: str | None = None) -> html.Div:
     db_path = dash.get_app().server.config.get("DB_PATH", ":memory:")
     conn = get_connection(db_path)
+    header_text = "🃏 Hands"
     try:
         username = get_setting(conn, "hero_username", default="")
         hero_id = upsert_player(conn, username) if username else None
@@ -31,15 +32,33 @@ def layout() -> html.Div:
         if hero_id is None:
             return html.Div("Configure el usuario Hero en la página de ajustes primero.")
 
-        # Consulta con JOIN a sessions para obtener la fecha
-        df = pd.read_sql("""
+        # Obtener info de la sesión para el título si existe session_id
+        if session_id:
+            s_row = conn.execute(
+                "SELECT start_time, small_blind, big_blind FROM sessions WHERE id = ?",
+                (int(session_id),)
+            ).fetchone()
+            if s_row:
+                date_part = s_row[0].split("T")[0] if s_row[0] else "-"
+                header_text = f"🃏 Hands (session: {date_part} {s_row[1]}/{s_row[2]})"
+
+        # Consulta dinámica según si existe session_id
+        sql = """
             SELECT s.start_time, h.id, h.source_hand_id, hp.hole_cards, h.total_pot, hp.net_result
             FROM hands h
             JOIN hand_players hp ON h.id = hp.hand_id
             JOIN sessions s ON h.session_id = s.id
             WHERE hp.player_id = ?
-            ORDER BY s.start_time DESC, h.id DESC
-        """, conn, params=(hero_id,))
+        """
+        params = [hero_id]
+
+        if session_id:
+            sql += " AND h.session_id = ?"
+            params.append(int(session_id))
+
+        sql += " ORDER BY s.start_time DESC, h.id DESC"
+
+        df = pd.read_sql(sql, conn, params=params)
     finally:
         conn.close()
 
@@ -57,7 +76,7 @@ def layout() -> html.Div:
         })
 
     return html.Div([
-        html.H2("🃏 Hands"),
+        html.H2(header_text),
         dcc.Link(
             "← Back to Home",
             href="/",
