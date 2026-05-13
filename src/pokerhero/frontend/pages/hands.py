@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dash
 import pandas as pd
+from pathlib import Path
 from dash import html, dash_table, dcc, Input, Output, State, callback
 from pokerhero.database.db import get_connection, get_setting, upsert_player, toggle_hand_favorite
 
@@ -20,6 +21,13 @@ def _format_cards_text(cards_str: str | None) -> str:
             suit = _SUIT_SYMBOLS.get(card[-1].lower(), card[-1])
             parts.append(f"{rank}{suit}")
     return " ".join(parts) if parts else "—"
+
+def _has_ai_report(source_hand_id: str, hand_id: int) -> str:
+    """Devuelve '📄' si existe el archivo de análisis de IA, '' si no."""
+    ai_dir = Path("ai_analysis")
+    filename = f"{source_hand_id}-{hand_id}.txt"
+    filepath = ai_dir / filename
+    return "📄" if filepath.exists() else ""
 
 def layout(session_id: str | None = None) -> html.Div:
     db_path = dash.get_app().server.config.get("DB_PATH", ":memory:")
@@ -54,13 +62,17 @@ def layout(session_id: str | None = None) -> html.Div:
         pnl = float(row["net_result"]) if row["net_result"] is not None else 0.0
         date_val = row["start_time"].replace("T", " ")[:16] if row["start_time"] else "-"
         is_fav = "★" if row["is_favorite"] else "☆"
+        source_hand_id = str(row["source_hand_id"])
+        hand_id = int(row["id"])
+        ai_report_icon = _has_ai_report(source_hand_id, hand_id)  # ✅ Nueva columna
         rows.append({
-            "id": int(row["id"]),
-            "favorite": is_fav,  # Nueva columna para la estrella
+            "id": hand_id,
+            "favorite": is_fav,
             "date": date_val,
-            "hand_num": str(row["source_hand_id"]),
+            "hand_num": source_hand_id,
             "hole_cards": _format_cards_text(row["hole_cards"]),
             "_pnl_raw": pnl,
+            "ai_report": ai_report_icon,  # ✅ Añadido
         })
 
     return html.Div([
@@ -83,6 +95,7 @@ def layout(session_id: str | None = None) -> html.Div:
                 {"name": "Hand #", "id": "hand_num"},
                 {"name": "Hero cards", "id": "hole_cards"},
                 {"name": "Hero benefit", "id": "_pnl_raw", "type": "numeric"},
+                {"name": "AI Report", "id": "ai_report", "type": "text", "presentation": "markdown"},
             ],
             data=rows,
             sort_action="native",
@@ -119,9 +132,10 @@ def layout(session_id: str | None = None) -> html.Div:
                 },
                 {
                     "if": {"filter_query": "{favorite} = '☆'", "column_id": "favorite"},
-                    "color": "#aaa",     # Gris para estrella vacía
-                    "fontSize": "18px",  # Mismo tamaño para alineación
+                    "color": "#aaa",
+                    "fontSize": "18px",
                 },
+                { "if": {"column_id": "ai_report"}, "color": "#6c5ce7", "fontSize": "16px", "textAlign": "center", "fontWeight": "bold" },
             ],
         )
     ], style={"maxWidth": "1000px", "margin": "40px auto", "padding": "0 20px"})
