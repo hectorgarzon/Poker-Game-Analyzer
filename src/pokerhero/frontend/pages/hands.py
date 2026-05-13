@@ -57,7 +57,7 @@ def layout() -> html.Div:
         })
 
     return html.Div([
-        html.H2("🔍 Hands"),
+        html.H2("🃏 Hands"),
         dcc.Link(
             "← Back to Home",
             href="/",
@@ -71,7 +71,7 @@ def layout() -> html.Div:
                 {"name": "Hand #", "id": "hand_num"},
                 {"name": "Hero Cards", "id": "hole_cards"},
                 {"name": "Pot", "id": "pot"},
-                {"name": "Net result", "id": "_pnl_raw", "type": "numeric"},
+                {"name": "Hero benefit", "id": "_pnl_raw", "type": "numeric"},
             ],
             data=rows,
             sort_action="native",
