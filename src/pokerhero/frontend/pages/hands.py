@@ -123,13 +123,17 @@ def layout(session_id: str | None = None) -> html.Div:
     ], style={"maxWidth": "1000px", "margin": "40px auto", "padding": "0 20px"})
 
 @callback(
-    Output("url-hands", "pathname"),
+    Output("url-hands", "href"),  # Se cambia de "pathname" a "href"
     Input("all-hands-table", "active_cell"),
     State("all-hands-table", "data"),
+    State("url-hands", "search"),
     prevent_initial_call=True
 )
-def on_click_hand(active_cell, rows):
+def on_click_hand(active_cell, rows, search):
     if active_cell:
         hand_id = rows[active_cell["row"]]["id"]
-        return f"/hand/{hand_id}"
+        query = f"?origin=hands"
+        if search:
+            query += f"&{search[1:]}"
+        return f"/hand/{hand_id}{query}"
     return dash.no_update

@@ -372,16 +372,19 @@ def layout(hand_id: int | str | None = None, **kwargs: str) -> Component:
 
     if origin == "charts":
         back_href = f"/session-charts?session_id={session_id}" if session_id else "/session-charts"
-        back_text = "← Volver a Gráficos"
-    elif origin == "player": # Nueva condición para retorno a jugador
+        back_text = "← Back to graphs"
+    elif origin == "player":
         back_href = f"/player/{player_id}" if player_id else "/players"
-        back_text = "← Volver al Jugador"
+        back_text = "← Back to player"
+    elif origin == "hands":  # Nueva condición para la página de manos global
+        back_href = f"/hands?session_id={session_id}" if session_id else "/hands"
+        back_text = "← Back to hands"
     elif session_id:
         back_href = f"/sessions?session_id={session_id}&level=hands"
-        back_text = "← Volver a Lista de Manos"
+        back_text = "← Back to hand list"
     else:
         back_href = "/sessions"
-        back_text = "← Volver a Sesiones"
+        back_text = "← Back to sessions"
 
     return html.Div(
         style={
