@@ -74,15 +74,15 @@ def layout(session_id: str | None = None) -> html.Div:
             id="all-hands-table",
             columns=[
                 {
-                    "name": "",
+                    "name": "Fav",
                     "id": "favorite",
                     "type": "text",
                     "presentation": "markdown"
                 },
-                {"name": "Fecha", "id": "date"},
-                {"name": "Mano #", "id": "hand_num"},
-                {"name": "Cartas", "id": "hole_cards"},
-                {"name": "Resultado Neto", "id": "_pnl_raw", "type": "numeric"},
+                {"name": "Date", "id": "date"},
+                {"name": "Hand #", "id": "hand_num"},
+                {"name": "Hero cards", "id": "hole_cards"},
+                {"name": "Hero benefit", "id": "_pnl_raw", "type": "numeric"},
             ],
             data=rows,
             sort_action="native",
