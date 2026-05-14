@@ -639,7 +639,9 @@ def _render_hand_view(
         )
 
      # Sección de Villains (oponentes) - ahora incluye al Hero
-    hero_username = hand_details.get("hero_username", "enygma9999")  # Obtener el nombre de usuario del Hero
+    db_path = _get_db_path()
+    with get_connection(db_path) as conn_hero:
+        hero_username = get_setting(conn_hero, "hero_username", default="")
     villain_section = _build_villain_section(hand_details.get("villains", []), opp_stats, hero_username)
     if villain_section:
         header_children.append(villain_section)
@@ -709,7 +711,7 @@ def _get_ai_analysis_filepath(source_hand_id: str, hand_id: int) -> Path | None:
 def _build_villain_section(
     villain_rows: list[_VillainRow],
     opp_stats: pd.DataFrame,
-    hero_username: str = "enygma9999"  # Nombre de usuario del Hero que queremos reemplazar
+    hero_username: str = ""
 ) -> Component | None:
     """Construye la sección de oponentes (villains) con sus stats en línea horizontal."""
     if not villain_rows:
@@ -1129,7 +1131,7 @@ def handle_ai_analysis(
     try:
         if ai_n_clicks == 1 or current_analysis is None:
             hand_details = get_hand_details(conn, hand_id)
-            hero_username = hand_details.get("hero_username", "")
+            hero_username = get_setting(conn, "hero_username", default="")
             analysis = analyze_hand_with_ai(conn, hand_id, hero_username=hero_username)
             
             if analysis["status"] == "success":
