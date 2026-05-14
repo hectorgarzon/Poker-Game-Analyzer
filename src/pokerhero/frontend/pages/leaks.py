@@ -4,15 +4,20 @@ import pandas as pd
 from dash import html, dash_table
 from pokerhero.database.db import get_connection, get_setting, upsert_player
 from pokerhero.analysis.queries import get_hero_hand_players, get_actions
+from flask import request
+import urllib.parse
 
 dash.register_page(__name__, path="/leaks", name="Leaks")
 
 def _get_db_path() -> str:
     return dash.get_app().server.config.get("DB_PATH", ":memory:")
 
-def _get_hero_player_id(db_path: str) -> int | None:
-    if db_path == ":memory:":
-        return None
+def _get_player_id(db_path: str, player_id_param: int | None = None) -> int | None:
+    """Obtiene el ID del jugador: si se pasa player_id_param, lo usa DIRECTAMENTE; si no, usa el Hero."""
+    if player_id_param is not None:
+        return player_id_param 
+
+    # Solo si no hay player_id_param, usa el Hero
     conn = get_connection(db_path)
     try:
         username = get_setting(conn, "hero_username", default="")
@@ -20,21 +25,21 @@ def _get_hero_player_id(db_path: str) -> int | None:
     finally:
         conn.close()
 
-def get_hero_hands_with_actions_existing_queries(db_path: str, hero_id: int) -> pd.DataFrame:
-    """Obtiene todas las manos del héroe con sus acciones usando consultas existentes."""
+def get_hero_hands_with_actions_existing_queries(db_path: str, player_id: int) -> pd.DataFrame:
+    """Obtiene todas las manos del jugador con sus acciones usando consultas existentes."""
     conn = get_connection(db_path)
     try:
-        hero_hands = get_hero_hand_players(conn, hero_id)
-        hero_info = conn.execute("SELECT id, username FROM players WHERE id = ?", (hero_id,)).fetchone()
-        username = hero_info[1]
+        hero_hands = get_hero_hand_players(conn, player_id)
+        hero_info = conn.execute("SELECT id, username FROM players WHERE id = ?", (player_id,)).fetchone()
+        username = hero_info[1] if hero_info else "Desconocido"
         results = []
         for _, row in hero_hands.iterrows():
             hand_id = row['hand_id']
             net_profit = row['net_result']
             actions_df = get_actions(conn, hand_id)
-            hero_actions = actions_df[actions_df['player_id'] == hero_id]
+            player_actions = actions_df[actions_df['player_id'] == player_id]
             def get_actions_for_street(street):
-                street_actions = hero_actions[hero_actions['street'] == street]
+                street_actions = player_actions[player_actions['street'] == street]
                 if street_actions.empty:
                     return None
                 return " | ".join(
@@ -45,7 +50,7 @@ def get_hero_hands_with_actions_existing_queries(db_path: str, hero_id: int) -> 
                 )
             results.append({
                 'username': username,
-                'id': hero_id,
+                'id': player_id,
                 'hand_id': hand_id,
                 'net_profit': net_profit,
                 'preflop_actions': get_actions_for_street('PREFLOP'),
@@ -58,9 +63,8 @@ def get_hero_hands_with_actions_existing_queries(db_path: str, hero_id: int) -> 
         conn.close()
 
 def analyze_losing_action_combinations(df: pd.DataFrame) -> list[dict]:
-    """Analiza las combinaciones de acciones del héroe (solo última acción por calle) y devuelve los top 5 que más pierden."""
+    """Analiza las combinaciones de acciones del jugador (solo última acción por calle) y devuelve los top 5 que más pierden."""
     df_filtered = df[df['flop_actions'].notna()].copy()
-
     def create_action_combo(row):
         combo_parts = []
         def get_last_action_with_street(actions_str, street_prefix):
@@ -68,23 +72,15 @@ def analyze_losing_action_combinations(df: pd.DataFrame) -> list[dict]:
                 return None
             actions = actions_str.split(' | ')
             last_action = actions[-1]
-            clean_action = last_action.split('(')[0]
-            clean_action = clean_action.split(' to call')[0]
-            clean_action = clean_action.strip()
+            clean_action = last_action.split('(')[0].split(' to call')[0].strip()
             return f"{street_prefix}/{clean_action}" if clean_action else None
-        preflop = get_last_action_with_street(row['preflop_actions'], "PR")
-        if preflop: combo_parts.append(preflop)
-        flop = get_last_action_with_street(row['flop_actions'], "F")
-        if flop: combo_parts.append(flop)
-        turn = get_last_action_with_street(row['turn_actions'], "T")
-        if turn: combo_parts.append(turn)
-        river = get_last_action_with_street(row['river_actions'], "R")
-        if river: combo_parts.append(river)
+        for col, pref in [('preflop_actions', 'PR'), ('flop_actions', 'F'), ('turn_actions', 'T'), ('river_actions', 'R')]:
+            part = get_last_action_with_street(row[col], pref)
+            if part:
+                combo_parts.append(part)
         return ' -> '.join(combo_parts) if combo_parts else None
-
     df_filtered['action_combo'] = df_filtered.apply(create_action_combo, axis=1)
     df_filtered = df_filtered.dropna(subset=['action_combo'])
-
     combo_stats = df_filtered.groupby('action_combo').agg(
         total_loss=('net_profit', 'sum'),
         hand_count=('hand_id', 'count'),
@@ -92,34 +88,53 @@ def analyze_losing_action_combinations(df: pd.DataFrame) -> list[dict]:
         median_loss=('net_profit', 'median'),
         hand_ids=('hand_id', lambda x: list(x))
     ).reset_index()
-
-    # Filtrar y ordenar: las 5 combinaciones que más pierden (más negativo = mayor pérdida)
     worst_combos = combo_stats[combo_stats['hand_count'] > 5].sort_values('total_loss', ascending=True).head(5)
-
-    # Convertir hand_ids a string para que Dash lo acepte
     worst_combos['hand_ids'] = worst_combos['hand_ids'].apply(lambda x: ', '.join(map(str, x)))
-
     return worst_combos[['action_combo', 'total_loss', 'avg_loss', 'median_loss', 'hand_count', 'hand_ids']].to_dict('records')
 
-def layout():
+def layout(player_id=None, **kwargs):
+    """
+    Dash pasa automáticamente los parámetros de la URL (p.ej. ?player_id=8906)
+    como argumentos a la función layout.
+    """
     db_path = _get_db_path()
-    hero_id = _get_hero_player_id(db_path)
-    if not hero_id:
-        return html.Div("⚠️ Hero no configurado.", style={"color": "orange", "padding": "20px"})
 
-    df = get_hero_hands_with_actions_existing_queries(db_path, hero_id)
+    # Convertir el parámetro de la URL a entero si existe
+    p_id_param = None
+    if player_id is not None:
+        try:
+            p_id_param = int(player_id)
+        except (ValueError, TypeError):
+            p_id_param = None
+
+    # Si hay p_id_param, se usa ese; si no, se busca al Hero configurado
+    target_player_id = _get_player_id(db_path, p_id_param)
+
+    if not target_player_id:
+        return html.Div("⚠️ No se pudo determinar el jugador. Configura el Hero o pasa un player_id válido.",
+                       style={"color": "orange", "padding": "20px"})
+
+    # Las consultas SQL ahora usan target_player_id (el del parámetro o el hero)
+    df = get_hero_hands_with_actions_existing_queries(db_path, target_player_id)
     if df.empty:
         return html.Div("No se encontraron manos para analizar.", style={"padding": "20px"})
 
     worst_combos = analyze_losing_action_combinations(df)
-
     if not worst_combos:
-        return html.Div("⚠️ No se encontraron combinaciones con más de 5 manos.", style={"padding": "20px", "color": "#666"})
+        return html.Div("⚠️ No se encontraron combinaciones con más de 5 manos.",
+                       style={"padding": "20px", "color": "#666"})
+
+    # Obtener el nombre del jugador específico para el título
+    conn = get_connection(db_path)
+    try:
+        player_row = conn.execute("SELECT username FROM players WHERE id = ?", (target_player_id,)).fetchone()
+        player_name = player_row[0] if player_row else "Jugador desconocido"
+    finally:
+        conn.close()
 
     return html.Div([
-        html.H2("🔍 Patrones de Pérdida del Héroe"),
-        html.P("Top 5 combinaciones de acciones (mínimo 6 manos) que más dinero hacen perder."),
-
+        html.H2(f"🔍 Patrones de Pérdida de {player_name}"),
+        html.P(f"Top 5 combinaciones de acciones (mínimo 6 manos) que más dinero hacen perder a {player_name}."),
         dash_table.DataTable(
             id="leaks-table",
             columns=[
@@ -148,7 +163,6 @@ def layout():
             tooltip_delay=0,
             tooltip_duration=None,
         ),
-
         html.Div([
             html.H3("📊 Estadísticas Generales"),
             html.P(f"Total perdido en estas combinaciones: ${sum(row['total_loss'] for row in worst_combos):.2f}"),
