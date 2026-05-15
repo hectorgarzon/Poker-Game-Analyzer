@@ -77,7 +77,7 @@ def analyze_losing_action_combinations(df: pd.DataFrame) -> list[dict]:
             last_action = actions[-1]
             clean_action = last_action.split('(')[0].split(' to call')[0].strip()
             return f"{street_prefix}/{clean_action}" if clean_action else None
-        for col, pref in [('preflop_actions', 'PR'), ('flop_actions', 'F'), ('turn_actions', 'T'), ('river_actions', 'R')]:
+        for col, pref in [('preflop_actions', 'PF'), ('flop_actions', 'F'), ('turn_actions', 'T'), ('river_actions', 'R')]:
             part = get_last_action_with_street(row[col], pref)
             if part:
                 combo_parts.append(part)
