@@ -4,6 +4,8 @@ from dash import html, dcc, register_page, dash_table, callback, Input, Output, 
 import dash
 import pandas as pd
 from pokerhero.database.db import get_connection, get_setting, upsert_player
+from flask import request
+import urllib.parse
 
 register_page(__name__, path_template="/player/<player_id>")
 
@@ -128,6 +130,11 @@ def layout(player_id: str = None, **kwargs):
                 href="/players",
                 style={"fontSize": "13px", "color": "#0074D9"},
             ),
+            dcc.Link(
+                    "🔍 Ver Leaks",
+                    href=f"/leaks?player_id={player_id}&origin={urllib.parse.quote_plus('/player')}",
+                    style={"fontSize": "13px", "color": "#0074D9"},
+                ),
             html.Hr(),
             html.Div(id="player-detail-content", children=[
                  html.Div(

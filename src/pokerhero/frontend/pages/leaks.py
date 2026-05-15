@@ -1,13 +1,16 @@
 from __future__ import annotations
 import dash
 import pandas as pd
-from dash import html, dash_table
+from dash import html, dash_table, dcc
 from pokerhero.database.db import get_connection, get_setting, upsert_player
 from pokerhero.analysis.queries import get_hero_hand_players, get_actions
 from flask import request
 import urllib.parse
+from flask import request
 
 dash.register_page(__name__, path="/leaks", name="Leaks")
+
+MIN_HANDS = 3
 
 def _get_db_path() -> str:
     return dash.get_app().server.config.get("DB_PATH", ":memory:")
@@ -88,7 +91,7 @@ def analyze_losing_action_combinations(df: pd.DataFrame) -> list[dict]:
         median_loss=('net_profit', 'median'),
         hand_ids=('hand_id', lambda x: list(x))
     ).reset_index()
-    worst_combos = combo_stats[combo_stats['hand_count'] > 5].sort_values('total_loss', ascending=True).head(5)
+    worst_combos = combo_stats[combo_stats['hand_count'] > MIN_HANDS].sort_values('total_loss', ascending=True).head(5)
     worst_combos['hand_ids'] = worst_combos['hand_ids'].apply(lambda x: ', '.join(map(str, x)))
     return worst_combos[['action_combo', 'total_loss', 'avg_loss', 'median_loss', 'hand_count', 'hand_ids']].to_dict('records')
 
@@ -121,7 +124,7 @@ def layout(player_id=None, **kwargs):
 
     worst_combos = analyze_losing_action_combinations(df)
     if not worst_combos:
-        return html.Div("⚠️ No se encontraron combinaciones con más de 5 manos.",
+        return html.Div("⚠️ No se encontraron combinaciones.",
                        style={"padding": "20px", "color": "#666"})
 
     # Obtener el nombre del jugador específico para el título
@@ -132,8 +135,21 @@ def layout(player_id=None, **kwargs):
     finally:
         conn.close()
 
+    origin = kwargs.get('origin', '')
+
+    if origin == "/player" and player_id:
+        sep = "&" if "?" in origin else "?"
+        back_href = f"player/{player_id}"
+    else:
+        back_href = origin
+
     return html.Div([
         html.H2(f"🔍 Patrones de Pérdida de {player_name}"),
+        dcc.Link(
+            "← Volver",
+            href=back_href,
+            style={"fontSize": "13px", "color": "#0074D9", "marginBottom": "10px"},
+        ),
         html.P(f"Top 5 combinaciones de acciones (mínimo 6 manos) que más dinero hacen perder a {player_name}."),
         dash_table.DataTable(
             id="leaks-table",
