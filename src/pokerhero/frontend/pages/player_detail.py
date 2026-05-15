@@ -130,11 +130,6 @@ def layout(player_id: str = None, **kwargs):
                 href="/players",
                 style={"fontSize": "13px", "color": "#0074D9"},
             ),
-            dcc.Link(
-                    "🔍 Ver Leaks",
-                    href=f"/leaks?player_id={player_id}&origin={urllib.parse.quote_plus('/player')}",
-                    style={"fontSize": "13px", "color": "#0074D9"},
-                ),
             html.Hr(),
             html.Div(id="player-detail-content", children=[
                  html.Div(
@@ -162,6 +157,23 @@ def layout(player_id: str = None, **kwargs):
                                 ]),
                                 html.Div(f"# hands: {total_hands}"),
                                 html.Div(f"# sessions: {total_sessions}"),
+                                dcc.Link(
+                                    html.Button(
+                                        "🔍 Analizar Leaks",
+                                        style={
+                                            "backgroundColor": "#0074D9",
+                                            "color": "white",
+                                            "border": "none",
+                                            "borderRadius": "4px",
+                                            "padding": "6px 12px",
+                                            "fontSize": "13px",
+                                            "cursor": "pointer",
+                                            "marginLeft": "10px",
+                                        },
+                                    ),
+                                    href=f"/leaks?player_id={player_id}&origin={urllib.parse.quote_plus('/player')}",
+                                    refresh=True,  # Fuerza la recarga de la página (opcional, pero evita problemas de caché)
+                                ),
                             ]
                         ),
                         html.Div(
@@ -351,3 +363,14 @@ def _navigate_to_hand(active_cell, data, player_id):
 
     db_id = data[active_cell["row"]]["db_id"]
     return f"/hand/{db_id}?origin=player&player_id={player_id}"
+
+@callback(
+    Output("leaks-redirect", "pathname"),  # <-- Cambiado de "path" a "pathname"
+    Input("leaks-button", "n_clicks"),
+    State("player-id-store", "data"),
+    prevent_initial_call=True,
+)
+def redirect_to_leaks(n_clicks, player_id):
+    if n_clicks > 0 and player_id:
+        return f"/leaks?player_id={player_id}&origin='player'"
+    return dash.no_update
