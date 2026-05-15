@@ -150,7 +150,7 @@ def layout(player_id=None, **kwargs):
             href=back_href,
             style={"fontSize": "13px", "color": "#0074D9", "marginBottom": "10px"},
         ),
-        html.P(f"Top 5 combinaciones de acciones (mínimo 6 manos) que más dinero hacen perder a {player_name}."),
+        html.P(f"Top 5 combinaciones de acciones (mínimo {MIN_HANDS} manos) que más dinero hacen perder a {player_name}."),
         dash_table.DataTable(
             id="leaks-table",
             columns=[
