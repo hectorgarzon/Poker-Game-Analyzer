@@ -17,8 +17,9 @@ def get_hand_details(conn: sqlite3.Connection, hand_id: int) -> dict | None:
     # Obtener información básica de la mano
     cursor.execute("""
         SELECT h.source_hand_id, h.board_flop, h.board_turn, h.board_river,
-               h.is_favorite, h.session_id
+               h.is_favorite, h.session_id, s.big_blind
         FROM hands h
+        JOIN sessions s ON h.session_id = s.id
         WHERE h.id = ?
     """, (hand_id,))
     hand_row = cursor.fetchone()
@@ -101,7 +102,8 @@ def get_hand_details(conn: sqlite3.Connection, hand_id: int) -> dict | None:
             }
             for row in villain_rows
         ],
-        "opp_stats": opp_stats
+        "opp_stats": opp_stats,
+        "bb_size": hand_row[6]
     }
 
 def get_players(conn: sqlite3.Connection, hero_id: int) -> pd.DataFrame:

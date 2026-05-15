@@ -683,7 +683,7 @@ def _render_hand_view(
     )
 
     # Sección de acciones
-    sections = _build_action_sections(actions_df, flop, turn, river, bb_size=hand_details.get("bb_size", 0.05), hand_id=hand_id)
+    sections = _build_action_sections(actions_df, flop, turn, river, bb_size=hand_details.get("bb_size"), hand_id=hand_id)
 
     # Showdown
     board_str = " ".join(p for p in [flop, turn, river] if p)
@@ -941,8 +941,8 @@ def _build_action_sections(
                 html.Table(
                     [
                         html.Thead(html.Tr([
-                            html.Th("Jugador", style={**_TH, "width": "200px"}),
-                            html.Th("Acción", style={**_TH, "width": "150px"}),
+                            html.Th("Jugador", style={**_TH, "width": "150px"}),
+                            html.Th("Acción", style={**_TH, "width": "200px"}),
                             html.Th("Bote", style=_TH),
                             html.Th("Contexto", style=_TH),
                             html.Th("EV", style=_TH),  # Nueva columna EV
@@ -989,7 +989,9 @@ def _build_action_sections(
 
         label = action_type
         if amount > 0:
-            label += f"  {amount:,.6g}"
+            amount_in_bb = amount/bb_size
+            bb_str = f"{amount_in_bb:.0f}" if amount_in_bb == int(amount_in_bb) else f"{amount_in_bb:.1f}"
+            label += f"  {amount:,.6g} ({bb_str}bb)"
         if action["is_all_in"]:
             label += "  🚨 ALL-IN"
 
