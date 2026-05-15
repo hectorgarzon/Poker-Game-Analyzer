@@ -787,6 +787,23 @@ def _render(
                     _kpi_card("Finished in flop", f"{saw_flop - saw_turn} ({((saw_flop - saw_turn)/total_hands*100):.1f}%)", font_size="20px"),
                     _kpi_card("Finished in turn", f"{saw_turn - saw_river} ({((saw_turn - saw_river)/total_hands*100):.1f}%)", font_size="20px"),
                     _kpi_card("Finished in river", f"{saw_river} ({(saw_river/total_hands*100):.1f}%)", font_size="20px"),
+                    dcc.Link(
+                        html.Button(
+                            "🔍 Analizar Leaks",
+                            style={
+                                "backgroundColor": "#0074D9",
+                                "color": "white",
+                                "border": "none",
+                                "borderRadius": "4px",
+                                "padding": "6px 12px",
+                                "fontSize": "13px",
+                                "cursor": "pointer",
+                                "marginLeft": "auto",  # Empuja el botón a la derecha
+                            },
+                        ),
+                        href=f"/leaks?origin=dashboard",
+                        refresh=True,
+                    ),
                 ],
             ),
         ],
