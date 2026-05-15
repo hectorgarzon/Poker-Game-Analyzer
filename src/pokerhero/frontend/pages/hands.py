@@ -194,7 +194,8 @@ def layout(session_id: str | None = None) -> html.Div:
     Input("hands-filter-favorites", "value"),
     Input("hands-filter-ai-reports", "value"),
     Input("all-hands-table", "active_cell"),
-    State("all-hands-table", "data"),
+    State("hands-data-store", "data"),
+    State("all-hands-table", "derived_virtual_data"),
     State("url-hands", "search"),  # Para obtener el session_id si viene de sessions
     prevent_initial_call=True,
 )
@@ -202,7 +203,8 @@ def update_hands_table(
     favorites_filter,
     ai_reports_filter,
     active_cell,
-    table_data,
+    full_data,
+    virtual_data,
     search
 ):
     ctx = dash.callback_context
@@ -214,14 +216,16 @@ def update_hands_table(
 
     # Si el trigger es un clic en la tabla
     if trigger_id == "all-hands-table" and active_cell:
-        if not table_data or not active_cell:
+        # Usar virtual_data para obtener la fila correcta tras ordenar/filtrar
+        current_rows = virtual_data if virtual_data is not None else full_data
+        if not current_rows or active_cell["row"] >= len(current_rows):
             raise dash.exceptions.PreventUpdate
+
+        target_row = current_rows[active_cell["row"]]
+        hand_id = target_row["id"]
 
         # Si es clic en la columna de favoritos
         if active_cell["column_id"] == "favorite":
-            hand_id = table_data[active_cell["row"]]["id"]
-            is_fav_now = table_data[active_cell["row"]]["favorite"] == "★"
-
             # Toggle en la base de datos
             db_path = dash.get_app().server.config.get("DB_PATH", ":memory:")
             conn = get_connection(db_path)
@@ -232,16 +236,14 @@ def update_hands_table(
                 is_fav = conn.execute(
                     "SELECT is_favorite FROM hands WHERE id = ?", (hand_id,)
                 ).fetchone()[0]
-                table_data[active_cell["row"]]["favorite"] = "★" if is_fav else "☆"
+                target_row["favorite"] = "★" if is_fav else "☆"
             finally:
                 conn.close()
 
-            return table_data, dash.no_update
+            return current_rows, dash.no_update
 
         # Si es clic en cualquier otra columna, navegar a la página de la mano
         else:
-            hand_id = table_data[active_cell["row"]]["id"]
-
             # Verificar si viene de sessions (tiene parámetro session_id)
             session_id = None
             origin = "hands"  # Valor por defecto
@@ -258,10 +260,10 @@ def update_hands_table(
 
     # Si el trigger es un cambio en los filtros
     elif trigger_id in ["hands-filter-favorites", "hands-filter-ai-reports"]:
-        if not table_data:
+        if not full_data:
             raise dash.exceptions.PreventUpdate
 
-        df = pd.DataFrame(table_data)
+        df = pd.DataFrame(full_data)
 
         # Aplicar filtros
         if favorites_filter and "favorites" in favorites_filter:
@@ -271,5 +273,3 @@ def update_hands_table(
             df = df[df["ai_report"] == "📄"]
 
         return df.to_dict("records"), dash.no_update
-
-    raise dash.exceptions.PreventUpdate
