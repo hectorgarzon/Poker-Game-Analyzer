@@ -27,6 +27,7 @@ class IngestResult:
     skipped: int = 0
     failed: int = 0
     errors: list[str] = field(default_factory=list)
+    session_id: int = -1
 
 
 def ingest_file(
@@ -143,6 +144,7 @@ def ingest_file(
         result.skipped,
         result.failed,
     )
+    result.session_id = session_id
     return result
 
 
@@ -179,6 +181,6 @@ def ingest_directory(
 
         # Registrar el archivo como procesado
         with open(log_path, "a", encoding="utf-8") as f:
-            f.write(f"{txt_file.name}\n")
+            f.write(f"{txt_file.name} | {res.session_id}\n")
 
     return results
