@@ -106,6 +106,72 @@ def get_hand_details(conn: sqlite3.Connection, hand_id: int) -> dict | None:
         "bb_size": hand_row[6]
     }
 
+def get_session_hand_types(conn: sqlite3.Connection, session_id: int, hero_id: int) -> dict:
+    """Obtiene el recuento de tipos de manos para una sesión específica."""
+    from pokerkit import Card, StandardHighHand
+    import itertools
+
+    # Obtener todas las manos de la sesión donde el héroe vio el flop
+    query = """
+        SELECT
+            h.id AS hand_id,
+            hp.hole_cards AS hero_cards,
+            h.board_flop,
+            h.board_turn,
+            h.board_river
+        FROM hands h
+        JOIN hand_players hp ON h.id = hp.hand_id
+        WHERE h.session_id = ?
+          AND hp.player_id = ?
+          AND (h.board_flop IS NOT NULL OR h.board_turn IS NOT NULL OR h.board_river IS NOT NULL)
+    """
+    hands = conn.execute(query, (session_id, hero_id)).fetchall()
+
+    # Inicializar contadores
+    counts = {
+        'trio': 0,
+        'escalera': 0,
+        'color': 0,
+        'full': 0
+    }
+
+    for hand in hands:
+        hero_cards = hand['hero_cards'].split() if hand['hero_cards'] else []
+        board_cards = []
+        for board in [hand['board_flop'], hand['board_turn'], hand['board_river']]:
+            if board:
+                board_cards.extend(board.split())
+
+        # Combinar cartas del héroe y del board
+        all_cards = hero_cards + board_cards
+        if len(all_cards) < 5:
+            continue  # No hay suficientes cartas para evaluar
+
+        try:
+            # Evaluar la mejor mano posible
+            best_hand = max(
+                StandardHighHand(list(combo))
+                for combo in itertools.combinations(Card.parse(''.join(all_cards)), 5)
+            )
+
+            # Contar tipos de manos
+            hand_str = str(best_hand).lower()
+            if 'three of a kind' in hand_str and 'full house' not in hand_str:
+                counts['trio'] += 1
+            if 'straight' in hand_str:
+                counts['escalera'] += 1
+            if 'flush' in hand_str and 'straight flush' not in hand_str:
+                counts['color'] += 1
+            if 'full house' in hand_str:
+                counts['full'] += 1
+
+        except Exception as e:
+            print(f"Error evaluando mano {hand['hand_id']}: {e}")
+            continue  # Ignorar errores de evaluación
+
+    return counts
+
+
 def get_players(conn: sqlite3.Connection, hero_id: int) -> pd.DataFrame:
     """Get all players with basic stats including showdown performance vs hero."""
     query = """

@@ -1390,8 +1390,8 @@ def _filter_hands_data(
 # Table builder helpers
 # ---------------------------------------------------------------------------
 def _build_session_table(df: pd.DataFrame) -> Any:
-    """Render a filtered sessions DataFrame as a sortable DataTable."""
-    from pokerhero.analysis.queries import get_hands, get_session_showdown_hands
+    """Renderiza un DataFrame de sesiones como una tabla ordenable."""
+    from pokerhero.analysis.queries import get_session_hand_types
 
     db_path = _get_db_path()
     hero_id = _get_hero_player_id(db_path)
@@ -1405,31 +1405,15 @@ def _build_session_table(df: pd.DataFrame) -> Any:
         "whiteSpace": "normal",
         "wordBreak": "break-word"
     }
+
     rows = []
     try:
         for _, row in df.iterrows():
             session_id = int(row["id"])
             pnl = float(row["net_profit"]) if row["net_profit"] is not None else 0.0
 
-            # Cálculo del KPI solicitado
-            session_hands = get_hands(conn, session_id, hero_id)
-
-            # Buscamos manos en la sesión donde algún villano llegó al showdown
-            # aunque el héroe no lo hiciera.
-            query_any_showdown = """
-                SELECT DISTINCT hand_id
-                FROM hand_players
-                WHERE hand_id IN (SELECT id FROM hands WHERE session_id = ?)
-                  AND went_to_showdown = 1
-                  AND player_id != ?
-            """
-            any_showdown_ids = {r[0] for r in conn.execute(query_any_showdown, (session_id, hero_id)).fetchall()}
-
-            preflop_folds = session_hands[
-                (session_hands['saw_flop'] == 0) &
-                (session_hands['went_to_showdown'] == 0)
-            ]
-            count = len(preflop_folds[preflop_folds['id'].isin(any_showdown_ids)])
+            # Obtener tipos de manos para esta sesión
+            hand_types = get_session_hand_types(conn, session_id, hero_id)
 
             date_time = row["start_time"].replace("T", " ")[:16] if row["start_time"] else "-"
 
@@ -1438,7 +1422,10 @@ def _build_session_table(df: pd.DataFrame) -> Any:
                 "date": date_time,
                 "stakes": f"{_fmt_blind(row['small_blind'])}/{_fmt_blind(row['big_blind'])}",
                 "hands": int(row["hands_played"]),
-                "preflop_folds_showdown": count,
+                "trio": hand_types['trio'],
+                "escalera": hand_types['escalera'],
+                "color": hand_types['color'],
+                "full": hand_types['full'],
                 "_pnl_raw": pnl,
                 "duration_minutes": int(row["duration_minutes"]) if pd.notna(row["duration_minutes"]) else 0,
                 "ev_status": str(row.get("ev_status", "📊 Calculate")),
@@ -1452,7 +1439,10 @@ def _build_session_table(df: pd.DataFrame) -> Any:
             {"name": "Date", "id": "date"},
             {"name": "Stakes", "id": "stakes"},
             {"name": "Hands", "id": "hands"},
-            {"name": "Preflop Folds w/ Showdown", "id": "preflop_folds_showdown"},
+            {"name": "Trio", "id": "trio"},
+            {"name": "Escalera", "id": "escalera"},
+            {"name": "Color", "id": "color"},
+            {"name": "Full", "id": "full"},
             {"name": "Duration (min)", "id": "duration_minutes"},
             {"name": "Net P&L", "id": "_pnl_raw", "type": "numeric", "format": {"specifier": ".1f"}},
             {"name": "EV Status", "id": "ev_status"},
@@ -2530,6 +2520,8 @@ def _render_actions(db_path: str, hand_id: int) -> tuple[html.Div | str, str]:
     from pokerhero.analysis.queries import get_actions, get_session_player_stats
 
     hero_id = _get_hero_player_id(db_path)
+    if hero_id is None:
+        return html.Div("No se ha configurado el héroe. Por favor, configúralo en la página de carga primero.")
     min_hands = _read_analysis_settings(db_path)["min_hands_classification"]
 
     conn = get_connection(db_path)
