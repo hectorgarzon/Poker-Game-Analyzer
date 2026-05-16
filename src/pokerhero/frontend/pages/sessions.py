@@ -1469,6 +1469,31 @@ def _build_session_table(df: pd.DataFrame) -> Any:
                 "color": "#e74c3c", "fontWeight": "600",
             },
             {"if": {"row_index": "odd"}, "backgroundColor": "var(--bg-2, #f9f9f9)"},
+            # Nuevas condiciones: texto negro + fondo verde claro
+            {
+                "if": {"filter_query": "{trio} > 0", "column_id": "trio"},
+                "color": "#000000",  # Texto negro
+                "backgroundColor": "#d4edda",  # Fondo verde claro
+                "fontWeight": "600",
+            },
+            {
+                "if": {"filter_query": "{escalera} > 0", "column_id": "escalera"},
+                "color": "#000000",
+                "backgroundColor": "#d4edda",
+                "fontWeight": "600",
+            },
+            {
+                "if": {"filter_query": "{color} > 0", "column_id": "color"},
+                "color": "#000000",
+                "backgroundColor": "#d4edda",
+                "fontWeight": "600",
+            },
+            {
+                "if": {"filter_query": "{full} > 0", "column_id": "full"},
+                "color": "#000000",
+                "backgroundColor": "#d4edda",
+                "fontWeight": "600",
+            },
         ],
         style_as_list_view=True,
         row_selectable=False,
