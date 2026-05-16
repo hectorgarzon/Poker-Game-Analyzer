@@ -1650,7 +1650,7 @@ def _render_sessions(db_path: str) -> html.Div | str:
                 type="text",
                 placeholder="YYYY-MM-DD",
                 debounce=True,
-                style=_input_style,
+                style={**_input_style, "width": "120px"},
             ),
             html.Span("To", style={"fontSize": "12px", "color": "var(--text-3, #666)"}),
             dcc.Input(
@@ -1658,7 +1658,7 @@ def _render_sessions(db_path: str) -> html.Div | str:
                 type="text",
                 placeholder="YYYY-MM-DD",
                 debounce=True,
-                style=_input_style,
+                style={**_input_style, "width": "120px"},
             ),
             dcc.Dropdown(
                 id="session-filter-stakes",
